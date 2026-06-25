@@ -1,0 +1,755 @@
+"""
+Dynamic Worksheet Generator — Creates printable math worksheets tailored to child's level.
+
+Generates A4-format math worksheets with:
+- Age/difficulty-appropriate problems
+- Visual elements (emojis for young children)
+- Header with child name and date
+- Teacher notes section
+"""
+
+import random
+import json
+from pathlib import Path
+from typing import Dict, List, Optional, Any
+from dataclasses import dataclass, field
+
+from .interactive_content.templates import TEMPLATE_REGISTRY
+from .interactive_content.progressions import (
+    NUMBER_RANGES,
+    QUESTIONS_PER_SESSION,
+    get_age_anchor_level,
+)
+
+
+@dataclass
+class WorksheetConfig:
+    """Configuration for worksheet generation."""
+    child_name: str = "小朋友"
+    age_group: str = "middle"           # small / middle / large
+    difficulty_level: int = 2           # 1-5
+    dimensions: List[str] = field(default_factory=lambda: ["counting", "shapes_space"])
+    problem_count: int = 1              # Single cartoon card per generation
+    include_instructions: bool = True
+    include_answer_key: bool = True
+    large_font: bool = True             # For young children
+    show_example: bool = True
+    learning_objective: str = ""        # Printed on worksheet, e.g. "感知三角形的多种变式"
+
+
+@dataclass
+class WorksheetProblem:
+    """A single problem on the worksheet."""
+    number: int
+    type: str
+    dimension: str
+    prompt: str
+    data: Dict[str, Any]
+    correct_answer: Any
+    workspace_lines: int = 2            # Number of blank lines for writing
+
+
+@dataclass
+class GeneratedWorksheet:
+    """A complete generated worksheet."""
+    title: str
+    child_name: str
+    date: str
+    age_group: str
+    difficulty_level: int
+    problems: List[WorksheetProblem]
+    instructions: str
+    answer_key: Dict[int, Any]
+    config: WorksheetConfig
+    total_possible: int
+    learning_objective: str = ""
+
+
+# ─── Worksheet Generator ──────────────────────────────────────────────
+
+def generate_worksheet(config: Optional[WorksheetConfig] = None) -> GeneratedWorksheet:
+    """
+    Generate a complete printable worksheet.
+
+    Args:
+        config: Worksheet generation settings (uses defaults if None)
+
+    Returns:
+        GeneratedWorksheet with problems, metadata, and answer key
+    """
+    if config is None:
+        config = WorksheetConfig()
+
+    level = config.difficulty_level if config.difficulty_level else get_age_anchor_level(config.age_group)
+    problems = _generate_worksheet_problems(config, level)
+
+    # Generate instructions
+    instructions = _generate_instructions(config.age_group)
+
+    # Build answer key
+    answer_key = {p.number: p.correct_answer for p in problems}
+
+    # Build title
+    dim_names = {
+        "counting": "数数练习", "addition_sub": "加减练习",
+        "shapes_space": "图形练习", "patterns": "规律练习",
+    }
+    title_parts = [dim_names.get(d, d) for d in config.dimensions]
+    title = f"{'、'.join(title_parts)} — {config.child_name}"
+
+    # Auto-generate learning objective if not provided
+    learning_obj = config.learning_objective or _auto_learning_objective(
+        config.dimensions, config.age_group, config.difficulty_level
+    )
+
+    return GeneratedWorksheet(
+        title=title,
+        child_name=config.child_name,
+        date="____年____月____日",
+        age_group=config.age_group,
+        difficulty_level=level,
+        problems=problems,
+        instructions=instructions,
+        answer_key=answer_key,
+        config=config,
+        total_possible=len(problems),
+        learning_objective=learning_obj,
+    )
+
+
+def _generate_worksheet_problems(
+    config: WorksheetConfig, level: int
+) -> List[WorksheetProblem]:
+    """Generate the problem list for a worksheet."""
+    problems = []
+    dimensions = config.dimensions
+    count = config.problem_count
+
+    # Distribute problems across dimensions
+    per_dim = max(1, count // len(dimensions))
+    remainder = count - per_dim * len(dimensions)
+
+    problem_number = 1
+    for i, dim in enumerate(dimensions):
+        num_for_dim = per_dim + (1 if i < remainder else 0)
+        dim_problems = _generate_for_dimension(dim, level, num_for_dim, problem_number)
+        problems.extend(dim_problems)
+        problem_number += num_for_dim
+
+    return problems
+
+
+def _generate_for_dimension(
+    dimension: str,
+    level: int,
+    count: int,
+    start_number: int,
+) -> List[WorksheetProblem]:
+    """Generate problems for a single dimension."""
+    problems = []
+    generators = TEMPLATE_REGISTRY.get(dimension)
+    if not generators:
+        return problems
+
+    q_types = list(generators.keys())
+    # Filter appropriate types for difficulty
+    if dimension == "counting":
+        if level <= 2:
+            q_types = [t for t in q_types if t in ("count_objects", "compare_quantity")]
+        elif level <= 3:
+            q_types = [t for t in q_types if t not in ("skip_counting",)]
+    elif dimension == "addition_sub":
+        if level <= 2:
+            q_types = ["object_add", "object_sub"]
+        elif level <= 3:
+            q_types = ["object_add", "object_sub", "symbol_add"]
+
+    for i in range(count):
+        q_type = random.choice(q_types)
+        generator = generators[q_type]
+        try:
+            data = generator(level)
+        except Exception:
+            continue
+
+        workspace = 2
+        if q_type in ("word_problem", "pattern_create"):
+            workspace = 3
+        elif q_type in ("number_composition", "symbol_add", "symbol_sub"):
+            workspace = 2
+
+        problem = WorksheetProblem(
+            number=start_number + i,
+            type=q_type,
+            dimension=dimension,
+            prompt=data.get("prompt", "请作答"),
+            data=data,
+            correct_answer=data.get("correct_answer", "（开放题）"),
+            workspace_lines=workspace,
+        )
+        problems.append(problem)
+
+    return problems
+
+
+def _auto_learning_objective(dimensions: List[str], age_group: str, difficulty: int) -> str:
+    """Auto-generate a learning objective based on dimension, age, and difficulty."""
+    age_map = {"small": "小班（3-4岁）", "middle": "中班（4-5岁）", "large": "大班（5-6岁）"}
+    age_label = age_map.get(age_group, age_group)
+
+    objectives = {
+        "counting": {
+            1: f"能手口一致地点数3以内的物体",
+            2: f"能手口一致地点数5以内的物体，并说出总数",
+            3: f"能按数（5以内）取物，比较两组物体的多少",
+            4: f"能手口一致地点数10以内的物体",
+            5: f"理解10以内序数，感知数的守恒",
+        },
+        "addition_sub": {
+            1: f"借助实物感知3以内数量的增加与减少",
+            2: f"借助实物操作进行5以内的加减",
+            3: f"借助实物操作进行10以内的加减",
+            4: f"能口编简单的加减应用题",
+            5: f"能进行10以内加减运算，理解加减互逆关系",
+        },
+        "shapes_space": {
+            1: f"能识别并命名圆形、正方形、三角形",
+            2: f"感知图形的多种变式，在拼搭中体会图形的翻转和位置变化",
+            3: f"能识别长方形、椭圆形、梯形等图形，关注边角特征",
+            4: f"能以自身为中心区分左右，判断远近高低",
+            5: f"认识常见立体图形，理解平面与立体的关系",
+        },
+        "patterns": {
+            1: f"能按单一明显特征（颜色、大小）分类",
+            2: f"能识别并复制简单AB模式（如红蓝红蓝）",
+            3: f"能识别、复制、扩展ABC/AABB模式",
+            4: f"能按两个维度分类，按规律排序",
+            5: f"能识别和创造复杂模式，实现跨形式转换",
+        },
+    }
+
+    parts = []
+    for dim in dimensions:
+        dim_obj = objectives.get(dim, {}).get(difficulty, "")
+        if dim_obj:
+            parts.append(dim_obj)
+
+    if not parts:
+        return f"通过操作练习发展{age_label}幼儿数学核心经验"
+
+    return "；".join(parts)
+
+
+def _generate_instructions(age_group: str) -> str:
+    """Generate age-appropriate instructions for the worksheet."""
+    if age_group == "small":
+        return (
+            "🌟 小朋友，请仔细看每一道题目。\n"
+            "数一数、圈一圈、连一连，慢慢做，不着急哦！"
+        )
+    elif age_group == "middle":
+        return (
+            "📝 请认真完成每一道题目。\n"
+            "先看清题目再作答，做完后检查一遍。加油！"
+        )
+    else:
+        return (
+            "📝 请独立完成以下题目。\n"
+            "注意书写工整，完成后再仔细检查一遍。\n"
+            "如有不会的题目，做好标记，结束后问老师。"
+        )
+
+
+# ─── Printable format helpers ─────────────────────────────────────────
+
+def worksheet_to_markdown(worksheet: GeneratedWorksheet) -> str:
+    """Convert a generated worksheet to markdown format for printing."""
+    lines = [
+        f"# 🧮 {worksheet.title}",
+        f"",
+        f"**姓名：** {worksheet.child_name}　　　**日期：** {worksheet.date}",
+        f"**难度等级：** {'⭐' * worksheet.difficulty_level}",
+        f"",
+        f"---",
+        f"",
+        f"### 📋 做题说明",
+        f"{worksheet.instructions}",
+        f"",
+        f"---",
+        f"",
+    ]
+
+    for p in worksheet.problems:
+        lines.append(f"### {p.number}. {p.prompt}")
+        lines.append(f"")
+        # Add visual elements if available
+        data = p.data
+        if "items" in data and isinstance(data["items"], list):
+            display_items = data["items"][:15]  # Limit for display
+            lines.append(f"> {'  '.join(display_items)}")
+        elif "group_a" in data and "group_b" in data:
+            ga = data["group_a"]
+            gb = data["group_b"]
+            lines.append(f"> {ga['label']}：{'  '.join([ga['emoji']] * ga['count'])}")
+            lines.append(f"> {gb['label']}：{'  '.join([gb['emoji']] * gb['count'])}")
+        elif "sequence" in data and isinstance(data["sequence"], list):
+            seq_str = "  ".join([str(s) if s else "❓" for s in data["sequence"]])
+            lines.append(f"> {seq_str}")
+        elif "expression" in data:
+            lines.append(f"> {data['expression']}")
+
+        # Workspace lines
+        for _ in range(p.workspace_lines):
+            lines.append(f"")
+        lines.append(f"")
+
+    # Answer key (separate page)
+    if worksheet.config.include_answer_key:
+        lines.append(f"---")
+        lines.append(f"")
+        lines.append(f"## 📝 答案（教师用）")
+        lines.append(f"")
+        for num, answer in worksheet.answer_key.items():
+            lines.append(f"- **第{num}题：** {answer}")
+
+    return "\n".join(lines)
+
+
+# ─── SVG Cartoon Illustration System ───────────────────────────────────
+
+# Cartoon color palette
+_SVG_COLORS = {
+    "apple": "#FF6B6B", "banana": "#FFD93D", "orange": "#FF8C42",
+    "grape": "#9B59B6", "leaf": "#6BCB77", "blue": "#4D96FF",
+    "pink": "#FF85A2", "sky": "#A8D8EA", "brown": "#C49B6C",
+}
+
+_SVG_ANIMAL_FACES = {
+    0: {"body": "#FF6B6B", "ears": "pointy", "face": "🐱"},
+    1: {"body": "#C49B6C", "ears": "floppy", "face": "🐶"},
+    2: {"body": "#FFD93D", "ears": "round", "face": "🐰"},
+    3: {"body": "#6BCB77", "ears": "small", "face": "🐸"},
+    4: {"body": "#FF85A2", "ears": "pointy", "face": "🐭"},
+}
+
+_FRUIT_EMOJIS = {"🍎": "apple", "🍊": "orange", "🍌": "banana", "🍇": "grape", "🍓": "strawberry", "🍐": "pear"}
+
+def _cartoon_animal_svg(index: int, size: int = 60) -> str:
+    """Single cartoon animal with face."""
+    face = _SVG_ANIMAL_FACES.get(index % 5, _SVG_ANIMAL_FACES[0])
+    return f'''<svg width="{size}" height="{size}" viewBox="0 0 60 60" xmlns="http://www.w3.org/2000/svg">
+      <circle cx="30" cy="32" r="24" fill="{face["body"]}" stroke="#333" stroke-width="1.5"/>
+      <circle cx="30" cy="32" r="20" fill="{face["body"]}" opacity="0.3"/>
+      <circle cx="20" cy="28" r="3" fill="#333"/><circle cx="40" cy="28" r="3" fill="#333"/>
+      <ellipse cx="30" cy="38" rx="5" ry="3" fill="#333"/>
+      <text x="30" y="52" text-anchor="middle" font-size="14" fill="#333">😊</text>
+    </svg>'''
+
+def _cartoon_fruit_svg(fruit_type: str, size: int = 50) -> str:
+    """Single cartoon fruit."""
+    color = _SVG_COLORS.get(fruit_type, "#FF6B6B")
+    return f'''<svg width="{size}" height="{size}" viewBox="0 0 50 50" xmlns="http://www.w3.org/2000/svg">
+      <circle cx="25" cy="28" r="18" fill="{color}" stroke="#333" stroke-width="1.5"/>
+      <ellipse cx="25" cy="28" rx="14" ry="16" fill="{color}" opacity="0.3"/>
+      <line x1="25" y1="10" x2="25" y2="16" stroke="#6BCB77" stroke-width="3" stroke-linecap="round"/>
+      <ellipse cx="21" cy="6" rx="6" ry="4" fill="#6BCB77" transform="rotate(-20 21 6)"/>
+      <circle cx="20" cy="26" r="2" fill="rgba(255,255,255,0.4)"/>
+    </svg>'''
+
+def _cartoon_shape_svg(shape_name: str, size: int = 80) -> str:
+    """Cartoon geometric shape with face and color."""
+    shapes_map = {
+        "圆形": '<circle cx="40" cy="40" r="30" fill="#4D96FF" stroke="#333" stroke-width="2"/>',
+        "正方形": '<rect x="10" y="10" width="60" height="60" rx="6" fill="#FF8C42" stroke="#333" stroke-width="2"/>',
+        "三角形": '<polygon points="40,5 75,70 5,70" fill="#6BCB77" stroke="#333" stroke-width="2"/>',
+        "长方形": '<rect x="5" y="18" width="70" height="44" rx="6" fill="#9B59B6" stroke="#333" stroke-width="2"/>',
+        "椭圆形": '<ellipse cx="40" cy="40" rx="32" ry="22" fill="#FF85A2" stroke="#333" stroke-width="2"/>',
+        "梯形": '<polygon points="15,25 65,25 75,55 5,55" fill="#FFD93D" stroke="#333" stroke-width="2"/>',
+        "半圆形": '<path d="M10,65 A30,25 0 0,1 70,65 Z" fill="#A8D8EA" stroke="#333" stroke-width="2"/>',
+        "星形": '<polygon points="40,5 48,30 75,30 53,45 61,70 40,55 19,70 27,45 5,30 32,30" fill="#FFD93D" stroke="#333" stroke-width="2"/>',
+    }
+    shape_svg = shapes_map.get(shape_name, shapes_map["圆形"])
+    return f'''<svg width="{size}" height="{size}" viewBox="0 0 80 80" xmlns="http://www.w3.org/2000/svg">
+      {shape_svg}
+      <circle cx="32" cy="36" r="4" fill="#333"/><circle cx="48" cy="36" r="4" fill="#333"/>
+      <path d="M32,52 Q40,60 48,52" fill="none" stroke="#333" stroke-width="2.5" stroke-linecap="round"/>
+    </svg>'''
+
+def _cartoon_bead_svg(color: str, size: int = 44) -> str:
+    """Single cartoon bead for pattern sequences."""
+    return f'''<svg width="{size}" height="{size}" viewBox="0 0 44 44" xmlns="http://www.w3.org/2000/svg">
+      <circle cx="22" cy="22" r="18" fill="{color}" stroke="#333" stroke-width="2"/>
+      <circle cx="17" cy="17" r="5" fill="rgba(255,255,255,0.35)"/>
+      <circle cx="22" cy="6" r="3" fill="rgba(255,255,255,0.5)"/>
+    </svg>'''
+
+def _problem_cartoon_svg(problem, age_group: str) -> str:
+    """Generate a cartoon SVG illustration for a single problem.
+
+    Returns an HTML-safe SVG string or empty string if no illustration fits.
+    """
+    ptype = problem.type
+    data = problem.data
+    size_scale = {"small": 1.3, "middle": 1.0, "large": 0.8}.get(age_group, 1.0)
+
+    # ── Counting: row of cartoon animals ──
+    if ptype == "count_objects" and "items" in data:
+        items = data["items"][:12]
+        count = len(items)
+        animal_size = int(50 * size_scale)
+        svg_w = count * animal_size + 20
+        animals = ""
+        for i in range(count):
+            x = 10 + i * animal_size
+            animals += f'<g transform="translate({x},5)">{_cartoon_animal_svg(i, animal_size)}</g>'
+        return f'<svg width="{svg_w}" height="{animal_size + 10}" viewBox="0 0 {svg_w} {animal_size + 10}" xmlns="http://www.w3.org/2000/svg">{animals}</svg>'
+
+    # ── Compare: two groups of cartoon fruits ──
+    if ptype == "compare_quantity" and "group_a" in data:
+        ga, gb = data["group_a"], data["group_b"]
+        fruit_size = int(44 * size_scale)
+        max_count = max(ga["count"], gb["count"])
+        svg_w = max_count * fruit_size + 80
+        svg_h = fruit_size * 2 + 40
+
+        parts = f'<text x="10" y="22" font-size="16" font-weight="bold" fill="#64748b">{ga["label"]}</text>'
+        for i in range(min(ga["count"], 10)):
+            parts += f'<g transform="translate({10 + i * fruit_size}, 30)">{_cartoon_fruit_svg("apple", fruit_size)}</g>'
+
+        y2 = fruit_size + 50
+        parts += f'<text x="10" y="{y2 + 16}" font-size="16" font-weight="bold" fill="#64748b">{gb["label"]}</text>'
+        for i in range(min(gb["count"], 10)):
+            parts += f'<g transform="translate({10 + i * fruit_size}, {y2 + 24})">{_cartoon_fruit_svg("orange", fruit_size)}</g>'
+
+        return f'<svg width="{svg_w}" height="{svg_h}" viewBox="0 0 {svg_w} {svg_h}" xmlns="http://www.w3.org/2000/svg">{parts}</svg>'
+
+    # ── Add/Sub: expression with visual items ──
+    if ptype in ("object_add", "object_sub") and "expression" in data:
+        expr = data.get("expression", "")
+        fruit_size = int(40 * size_scale)
+        svg_h = fruit_size + 30
+        svg_w = 400
+        parts = ""
+        # Decorative fruits
+        for i in range(3):
+            parts += f'<g transform="translate({20 + i * (fruit_size + 10)}, 10)">{_cartoon_fruit_svg("apple", fruit_size)}</g>'
+        parts += f'<text x="200" y="{fruit_size // 2 + 10}" text-anchor="middle" font-size="22" font-weight="900" fill="#4D96FF">{expr}</text>'
+        for i in range(2):
+            parts += f'<g transform="translate({240 + i * (fruit_size + 10)}, 10)">{_cartoon_fruit_svg("banana", fruit_size)}</g>'
+        return f'<svg width="{svg_w}" height="{svg_h}" viewBox="0 0 {svg_w} {svg_h}" xmlns="http://www.w3.org/2000/svg">{parts}</svg>'
+
+    # ── Shape ID: cartoon shape ──
+    if ptype == "shape_id":
+        shape_name = data.get("shape_name", "圆形")
+        shape_size = int(100 * size_scale)
+        return _cartoon_shape_svg(shape_name, shape_size)
+
+    # ── Pattern next: bead/block sequence ──
+    if ptype == "pattern_next" and "sequence" in data:
+        seq = data["sequence"][:10]
+        bead_size = int(44 * size_scale)
+        color_map = {"红": "#FF6B6B", "蓝": "#4D96FF", "黄": "#FFD93D", "绿": "#6BCB77", "紫": "#9B59B6", "橙": "#FF8C42", "粉": "#FF85A2"}
+        svg_w = len(seq) * bead_size + 20
+        svg_h = bead_size + 10
+        parts = ""
+        for i, item in enumerate(seq):
+            if item is None:
+                parts += f'<g transform="translate({10 + i * bead_size}, 5)"><rect x="0" y="0" width="{bead_size - 4}" height="{bead_size - 4}" rx="10" fill="none" stroke="#FF6B6B" stroke-width="3" stroke-dasharray="6,4"/><text x="{(bead_size - 4) / 2}" y="{(bead_size - 4) / 2 + 5}" text-anchor="middle" font-size="18" fill="#FF6B6B">?</text></g>'
+            else:
+                color = color_map.get(str(item)[:1], "#FF6B6B")
+                parts += f'<g transform="translate({10 + i * bead_size}, 5)">{_cartoon_bead_svg(color, bead_size)}</g>'
+        return f'<svg width="{svg_w}" height="{svg_h}" viewBox="0 0 {svg_w} {svg_h}" xmlns="http://www.w3.org/2000/svg">{parts}</svg>'
+
+    # ── Classify: colored groups ──
+    if ptype == "classify":
+        group_colors = ["#FF6B6B", "#4D96FF", "#6BCB77", "#FFD93D"]
+        bead_s = int(36 * size_scale)
+        svg_w = 4 * bead_s + 60
+        svg_h = bead_s * 2 + 30
+        parts = ""
+        for gi, color in enumerate(group_colors):
+            for ri in range(3):
+                x = 20 + gi * (bead_s + 10)
+                y = 10 + ri * (bead_s // 2)
+                parts += f'<circle cx="{x + bead_s // 2}" cy="{y + bead_s // 2}" r="{bead_s // 2 - 2}" fill="{color}" stroke="#333" stroke-width="1.5"/>'
+        return f'<svg width="{svg_w}" height="{svg_h}" viewBox="0 0 {svg_w} {svg_h}" xmlns="http://www.w3.org/2000/svg">{parts}</svg>'
+
+    # ── Sort: ordered items ──
+    if ptype == "sort":
+        sizes = [30, 38, 46, 54, 62]
+        svg_w = 5 * 70 + 20
+        svg_h = 80
+        parts = '<text x="10" y="16" font-size="14" fill="#64748b">从小到大 →</text>'
+        for i, s in enumerate(sizes):
+            x = 20 + i * 70
+            y = 70 - s
+            color = ["#FF6B6B", "#FF8C42", "#FFD93D", "#6BCB77", "#4D96FF"][i]
+            parts += f'<rect x="{x}" y="{y}" width="{s}" height="{s}" rx="8" fill="{color}" stroke="#333" stroke-width="2"/>'
+        return f'<svg width="{svg_w}" height="{svg_h}" viewBox="0 0 {svg_w} {svg_h}" xmlns="http://www.w3.org/2000/svg">{parts}</svg>'
+
+    # ── Number composition: visual number split ──
+    if ptype == "number_composition" and "expression" in data:
+        expr = data.get("expression", "")
+        svg_w, svg_h = 220, 100
+        parts = ""
+        for i in range(3):
+            parts += f'<g transform="translate({20 + i * 50}, 50)">{_cartoon_fruit_svg("apple", 36)}</g>'
+        parts += f'<text x="110" y="30" text-anchor="middle" font-size="18" font-weight="900" fill="#4D96FF">{expr}</text>'
+        for i in range(2):
+            parts += f'<g transform="translate({20 + i * 50}, 50)">{_cartoon_fruit_svg("banana", 36)}</g>'
+        return f'<svg width="{svg_w}" height="{svg_h}" viewBox="0 0 {svg_w} {svg_h}" xmlns="http://www.w3.org/2000/svg">{parts}</svg>'
+
+    return ""
+
+
+def worksheet_to_html(worksheet: GeneratedWorksheet) -> str:
+    """Convert a generated worksheet to cartoon-style printable HTML.
+
+    Age-specific styling:
+    - small (3-4): extra large fonts, large emoji, ≤4 problems per "page", dashed borders
+    - middle (4-5): large fonts, emoji+text mix, rounded cards
+    - large (5-6): standard fonts, cartoony accents, grade-school prep
+    """
+    age = worksheet.config.age_group
+    is_small = age == "small"
+    is_middle = age == "middle"
+    is_large = age == "large"
+
+    # Age-specific sizes
+    if is_small:
+        body_font = "20px"
+        emoji_size = "48px"
+        title_size = "32px"
+        prompt_size = "22px"
+        card_radius = "var(--kid-radius-xl)"
+        bg_color = "#FFF8E7"
+    elif is_middle:
+        body_font = "18px"
+        emoji_size = "36px"
+        title_size = "28px"
+        prompt_size = "20px"
+        card_radius = "var(--kid-radius-lg)"
+        bg_color = "#FFF9E6"
+    else:
+        body_font = "16px"
+        emoji_size = "28px"
+        title_size = "24px"
+        prompt_size = "17px"
+        card_radius = "var(--kid-radius-md)"
+        bg_color = "#F8FAFC"
+
+    problems_html = ""
+    for p in worksheet.problems:
+        data = p.data
+        visual_html = ""
+
+        # Generate cartoon SVG illustration (primary visual)
+        cartoon_svg = _problem_cartoon_svg(p, age)
+        if cartoon_svg:
+            visual_html = f'<div class="cartoon-illustration">{cartoon_svg}</div>'
+
+        # Fallback: emoji display if no SVG available
+        if not cartoon_svg:
+            if "items" in data and isinstance(data["items"], list):
+                items = "".join(
+                    f'<span class="item-emoji">{item}</span>'
+                    for item in data["items"][:12]
+                )
+                visual_html = f'<div class="visual-items">{items}</div>'
+            elif "group_a" in data and "group_b" in data:
+                ga = data["group_a"]
+                gb = data["group_b"]
+                a_emojis = "".join(f'<span class="item-emoji">{ga["emoji"]}</span>' for _ in range(ga["count"]))
+                b_emojis = "".join(f'<span class="item-emoji">{gb["emoji"]}</span>' for _ in range(gb["count"]))
+                visual_html = (
+                    f'<div class="compare-group"><div class="group-label">{ga["label"]}</div>'
+                    f'<div class="visual-items">{a_emojis}</div></div>'
+                    f'<div class="compare-group"><div class="group-label">{gb["label"]}</div>'
+                    f'<div class="visual-items">{b_emojis}</div></div>'
+                )
+            elif "sequence" in data and isinstance(data["sequence"], list):
+                seq = "".join(
+                    f'<span class="seq-item">{s if s else "❓"}</span>'
+                    for s in data["sequence"][:10]
+                )
+                visual_html = f'<div class="pattern-sequence">{seq}</div>'
+            elif "expression" in data:
+                visual_html = f'<div class="expression">{data["expression"]}</div>'
+
+        lines_html = "<br>" * (p.workspace_lines * (2 if is_small else 1))
+
+        # Colorful number badge
+        num_colors = ["#FF6B6B", "#4D96FF", "#6BCB77", "#FF8C42", "#9B59B6", "#4ECDC4"]
+        num_color = num_colors[(p.number - 1) % len(num_colors)]
+
+        # Single-card mode: larger card with extra padding
+        is_single = worksheet.config.problem_count == 1
+        card_class = "problem single-card" if is_single else "problem"
+
+        problems_html += f"""
+        <div class="{card_class}">
+            <div class="problem-header">
+                <span class="problem-number" style="background:{num_color}">{p.number}</span>
+                <span class="problem-prompt">{p.prompt}</span>
+            </div>
+            {visual_html}
+            <div class="workspace">{lines_html}</div>
+        </div>
+        """
+
+    answer_html = ""
+    if worksheet.config.include_answer_key:
+        answer_rows = "".join(
+            f"<tr><td>{num}</td><td>{answer}</td></tr>"
+            for num, answer in worksheet.answer_key.items()
+        )
+        answer_html = f"""
+        <div class="answer-key page-break">
+            <div class="answer-badge">👩‍🏫</div>
+            <h2>📝 答案（教师用）</h2>
+            <table><thead><tr><th>题号</th><th>答案</th></tr></thead><tbody>{answer_rows}</tbody></table>
+            <div class="mascot-footer">🌱 萌芽数学 · 为成长助力</div>
+        </div>
+        """
+
+    # Age-specific instructions
+    small_extra = ""
+    if is_small:
+        small_extra = '<div class="small-hint">💡 小班小朋友可以用手指点着数哦～</div>'
+
+    return f"""<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>{worksheet.title}</title>
+<style>
+  :root {{
+    --kid-orange: #FF8C42; --kid-blue: #4D96FF; --kid-green: #6BCB77;
+    --kid-purple: #9B59B6; --kid-pink: #FF85A2; --kid-yellow: #FFD93D;
+    --kid-cream: #FFF8E7; --kid-radius-sm: 12px; --kid-radius-md: 20px;
+    --kid-radius-lg: 28px; --kid-radius-xl: 36px;
+  }}
+  * {{ margin: 0; padding: 0; box-sizing: border-box; }}
+  body {{
+    font-family: 'Microsoft YaHei', 'PingFang SC', sans-serif;
+    max-width: 800px; margin: 0 auto; padding: 24px 20px;
+    font-size: {body_font}; background: {bg_color};
+    background-image: radial-gradient(circle at 90% 10%, #FFD93D15 0%, transparent 40%),
+                      radial-gradient(circle at 10% 90%, #4D96FF10 0%, transparent 40%);
+  }}
+  h1 {{
+    text-align: center; font-size: {title_size}; color: #FF8C42;
+    margin-bottom: 4px; font-weight: 900;
+  }}
+  .subtitle {{ text-align: center; font-size: 14px; color: #94a3b8; margin-bottom: 16px; }}
+  .meta {{
+    display: flex; justify-content: center; gap: 20px; margin: 12px 0 20px;
+    font-size: 15px; flex-wrap: wrap;
+  }}
+  .meta span {{
+    background: white; padding: 6px 16px; border-radius: 999px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.04); font-weight: 600;
+  }}
+  .instructions {{
+    background: white; border-radius: {card_radius}; padding: 16px 20px;
+    margin-bottom: 20px; border: 2px dashed #FFD93D;
+    font-size: 16px; color: #64748b; text-align: center;
+  }}
+  .learning-objective {{
+    background: linear-gradient(135deg, #E8F5E9 0%, #F1F8E9 100%);
+    border-radius: 16px; padding: 12px 20px; margin-bottom: 14px;
+    border-left: 5px solid #6BCB77;
+    font-size: 17px; color: #2E7D32; font-weight: 600;
+  }}
+  .lo-label {{ color: #1B5E20; font-weight: 800; }}
+  .small-hint {{
+    background: #FF85A210; border-radius: 20px; padding: 10px 20px;
+    margin-bottom: 16px; text-align: center; font-size: 18px; color: #FF85A2;
+    border: 2px dashed #FF85A230;
+  }}
+  .problem {{
+    margin: 18px 0; padding: 20px 24px;
+    background: white; border-radius: {card_radius};
+    border: 2.5px solid #e2e8f0;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.03);
+    transition: transform 0.2s;
+  }}
+  .problem:hover {{ transform: translateY(-2px); box-shadow: 0 6px 20px rgba(0,0,0,0.06); }}
+  .single-card {{
+    max-width: 650px; margin: 20px auto; padding: 32px 28px;
+    border-width: 3px; border-color: #FFD93D;
+    background: linear-gradient(135deg, #FFFDF5 0%, #FFF8E7 100%);
+  }}
+  .single-card .problem-prompt {{ font-size: {'26px' if is_small else '24px' if is_middle else '20px'}; }}
+  .single-card .workspace {{ min-height: {'120px' if is_small else '90px'}; }}
+  .problem-header {{ display: flex; align-items: flex-start; gap: 12px; margin-bottom: 14px; }}
+  .problem-number {{
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 36px; height: 36px; min-width: 36px;
+    border-radius: 50%; color: white; font-weight: 900;
+    font-size: 18px; box-shadow: 0 3px 8px rgba(0,0,0,0.12);
+  }}
+  .problem-prompt {{ font-size: {prompt_size}; color: #334155; font-weight: 700; padding-top: 6px; }}
+  .visual-items {{ font-size: {emoji_size}; line-height: 1.6; margin: 8px 0; display: flex; flex-wrap: wrap; gap: 6px; }}
+  .item-emoji {{ display: inline-block; transition: transform 0.2s; }}
+  .item-emoji:hover {{ transform: scale(1.2); }}
+  .compare-group {{ margin: 6px 0; }}
+  .group-label {{ font-size: 16px; font-weight: 700; color: #64748b; margin-bottom: 4px; }}
+  .pattern-sequence {{ font-size: {emoji_size}; display: flex; flex-wrap: wrap; gap: 6px; }}
+  .seq-item {{
+    padding: 6px 14px; border: 2px dashed #cbd5e1; border-radius: 12px;
+    background: #f8fafc; font-weight: 700;
+  }}
+  .expression {{
+    font-size: 28px; text-align: center; margin: 12px 0;
+    color: #4D96FF; font-weight: 900;
+    background: #4D96FF08; border-radius: 16px; padding: 12px;
+  }}
+  .workspace {{ min-height: {'80px' if is_small else '50px'}; }}
+  .cartoon-illustration {{
+    display: flex; justify-content: center; align-items: center;
+    margin: 16px 0; padding: 12px;
+    background: #FFFAF0; border-radius: 20px;
+    border: 2px dashed #FFD93D;
+    overflow-x: auto;
+  }}
+  .cartoon-illustration svg {{ max-width: 100%; height: auto; }}
+  .page-break {{ page-break-before: always; margin-top: 40px; }}
+  .answer-key h2 {{ text-align: center; color: #6BCB77; font-size: 22px; margin-bottom: 16px; }}
+  .answer-key table {{ width: 100%; border-collapse: collapse; border-radius: 16px; overflow: hidden; }}
+  .answer-key td, .answer-key th {{
+    border: 1px solid #e2e8f0; padding: 10px 16px; text-align: center; font-size: 16px;
+  }}
+  .answer-key th {{ background: #6BCB77; color: white; font-weight: 700; }}
+  .answer-key td {{ background: white; }}
+  .answer-badge {{ text-align: center; font-size: 48px; margin-bottom: 8px; }}
+  .mascot-footer {{ text-align: center; font-size: 13px; color: #94a3b8; margin-top: 24px; padding-top: 16px; border-top: 1px solid #e2e8f0; }}
+  .difficulty-stars {{ color: #FFD93D; font-size: 18px; }}
+  @media print {{
+    body {{ background: white; padding: 10px; font-size: {'18px' if is_small else '15px'}; }}
+    .problem {{ break-inside: avoid; box-shadow: none; border-color: #ddd; }}
+    .problem-number {{ box-shadow: none; }}
+  }}
+</style>
+</head>
+<body>
+  <h1>🧮 {worksheet.title}</h1>
+  <div class="subtitle">🌱 萌芽数学 · 幼儿数学练习操作单</div>
+  <div class="meta">
+    <span>👶 {worksheet.child_name}</span>
+    <span>📅 {worksheet.date}</span>
+    <span class="difficulty-stars">{'⭐' * worksheet.difficulty_level}</span>
+    <span>{
+      '🌱 小班' if is_small else '🌿 中班' if is_middle else '🌳 大班'
+    }</span>
+  </div>
+  <div class="learning-objective">
+    <span class="lo-label">🎯 学习目标：</span>{worksheet.learning_objective}
+  </div>
+  <div class="instructions">{worksheet.instructions.replace(chr(10), '<br>')}</div>
+  {small_extra}
+  {problems_html}
+  {answer_html}
+  <div class="mascot-footer">🌱 萌芽数学 Mathsprout · 陪伴每一次成长</div>
+</body>
+</html>"""

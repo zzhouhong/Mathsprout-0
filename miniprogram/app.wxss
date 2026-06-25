@@ -1,0 +1,305 @@
+/* 萌芽数学 Mathsprout — 全局样式 */
+
+/* ─── CSS 变量 / 设计 Token ─── */
+page {
+  --color-primary: #4F46E5;
+  --color-primary-light: #818CF8;
+  --color-primary-dark: #3730A3;
+  --color-bg: #F8FAFC;
+  --color-surface: #FFFFFF;
+  --color-text: #1E293B;
+  --color-text-secondary: #475569;
+  --color-text-muted: #94A3B8;
+  --color-border: #E2E8F0;
+  --color-success: #10B981;
+  --color-warning: #F59E0B;
+  --color-error: #EF4444;
+  --radius-sm: 8rpx;
+  --radius-md: 16rpx;
+  --radius-lg: 24rpx;
+  --shadow-card: 0 4rpx 24rpx rgba(0, 0, 0, 0.04);
+  --shadow-elevated: 0 8rpx 32rpx rgba(0, 0, 0, 0.08);
+
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC",
+    "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+  font-size: 28rpx;
+  color: var(--color-text);
+  background-color: var(--color-bg);
+  line-height: 1.6;
+  box-sizing: border-box;
+}
+
+/* ─── 通用容器 ─── */
+.container {
+  padding: 40rpx;
+  min-height: 100vh;
+}
+
+/* ─── 卡片 ─── */
+.card {
+  background: var(--color-surface);
+  border-radius: var(--radius-lg);
+  padding: 40rpx;
+  margin-bottom: 24rpx;
+  box-shadow: var(--shadow-card);
+}
+
+/* ─── 页头 ─── */
+.header {
+  margin-bottom: 32rpx;
+}
+.header-title {
+  font-size: 40rpx;
+  font-weight: 700;
+  color: var(--color-text);
+}
+
+/* ─── 按钮 ─── */
+.btn-primary {
+  width: 100%;
+  height: 88rpx;
+  background: var(--color-primary);
+  color: #fff;
+  font-size: 30rpx;
+  font-weight: 600;
+  border-radius: var(--radius-md);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+}
+.btn-primary[disabled] {
+  opacity: 0.4;
+}
+
+.btn-outline {
+  width: 100%;
+  height: 88rpx;
+  background: var(--color-surface);
+  color: var(--color-primary);
+  border: 2rpx solid var(--color-primary);
+  border-radius: var(--radius-md);
+  font-size: 28rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.btn {
+  width: 100%;
+  height: 80rpx;
+  background: var(--color-surface);
+  color: var(--color-text);
+  border: 2rpx solid var(--color-border);
+  border-radius: var(--radius-md);
+  font-size: 28rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 16rpx;
+}
+
+/* ─── 节标题 ─── */
+.section-title {
+  font-size: 30rpx;
+  font-weight: 600;
+  color: var(--color-text);
+  margin-bottom: 16rpx;
+}
+
+/* ─── 文本 ─── */
+.text-muted {
+  color: var(--color-text-muted);
+  font-size: 24rpx;
+}
+
+.text-secondary {
+  color: var(--color-text-secondary);
+  font-size: 28rpx;
+}
+
+/* ─── 标签 ─── */
+.tag {
+  display: inline-block;
+  padding: 6rpx 16rpx;
+  border-radius: 32rpx;
+  font-size: 22rpx;
+}
+.tag-green {
+  background: #D1FAE5;
+  color: #065F46;
+}
+.tag-amber {
+  background: #FEF3C7;
+  color: #92400E;
+}
+.tag-blue {
+  background: #DBEAFE;
+  color: #1E40AF;
+}
+.tag-purple {
+  background: #EDE9FE;
+  color: #5B21B6;
+}
+
+/* ─── 空状态 ─── */
+.empty-state {
+  text-align: center;
+  padding: 80rpx 40rpx;
+}
+.empty-icon {
+  font-size: 80rpx;
+  margin-bottom: 20rpx;
+}
+.empty-title {
+  font-size: 30rpx;
+  color: var(--color-text-muted);
+}
+.empty-hint {
+  font-size: 24rpx;
+  color: #CBD5E1;
+  margin-top: 8rpx;
+}
+
+/* ─── 加载 ─── */
+.loading {
+  text-align: center;
+  padding: 40rpx;
+  color: var(--color-text-muted);
+}
+
+/* ─── 错误 ─── */
+.error-text {
+  color: var(--color-error);
+  font-size: 26rpx;
+  margin-top: 16rpx;
+  text-align: center;
+}
+
+.error-card {
+  text-align: center;
+  padding: 120rpx 40rpx;
+}
+
+/* ─── 加载 ─── */
+.loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 120rpx 40rpx;
+}
+.loading-text {
+  font-size: 28rpx;
+  color: var(--color-text-muted);
+  margin-top: 20rpx;
+}
+
+/* ─── 报告列表 ─── */
+.report-list {
+  padding: 0;
+}
+.report-item {
+  background: var(--color-surface);
+  border-radius: var(--radius-md);
+  padding: 24rpx 32rpx;
+  margin-bottom: 16rpx;
+  box-shadow: var(--shadow-card);
+  display: flex;
+  flex-direction: column;
+  position: relative;
+}
+.item-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8rpx;
+}
+.item-date {
+  font-size: 24rpx;
+  color: var(--color-text-muted);
+}
+.item-badge {
+  font-size: 22rpx;
+  background: #D1FAE5;
+  color: #065F46;
+  padding: 4rpx 12rpx;
+  border-radius: 20rpx;
+}
+.item-summary {
+  font-size: 26rpx;
+  color: var(--color-text-secondary);
+  line-height: 1.5;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.item-arrow {
+  position: absolute;
+  right: 32rpx;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--color-text-muted);
+  font-size: 32rpx;
+}
+.item-type {
+  font-size: 22rpx;
+  color: var(--color-text-muted);
+  margin-top: 4rpx;
+}
+
+/* ─── 拍照分析 ─── */
+.preview-empty {
+  width: 100%;
+  height: 500rpx;
+  background: var(--color-border);
+  border-radius: var(--radius-md);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 24rpx;
+}
+.preview-empty .empty-icon {
+  font-size: 72rpx;
+  margin-bottom: 12rpx;
+}
+.preview-empty .empty-text {
+  font-size: 26rpx;
+  color: var(--color-text-muted);
+}
+
+.result {
+  background: var(--color-surface);
+  border-radius: var(--radius-lg);
+  padding: 32rpx;
+  margin-top: 24rpx;
+  box-shadow: var(--shadow-card);
+}
+.score-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16rpx 0;
+  border-bottom: 1rpx solid var(--color-border);
+}
+.score-item:last-child {
+  border-bottom: none;
+}
+.dim-name {
+  font-size: 28rpx;
+  color: var(--color-text);
+  font-weight: 500;
+}
+.dim-score {
+  font-size: 26rpx;
+  color: var(--color-primary);
+  font-weight: 600;
+}
+
+/* ─── 元信息 ─── */
+.meta {
+  font-size: 24rpx;
+  color: var(--color-text-muted);
+  margin-bottom: 24rpx;
+}

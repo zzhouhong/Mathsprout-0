@@ -1,0 +1,22 @@
+{
+  "name": "幼儿园数学教育智能体",
+  "short_name": "数学教育",
+  "description": "基于AI的幼儿数学操作单识别与能力发展评估系统",
+  "start_url": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#f0fdf4",
+  "theme_color": "#6366f1",
+  "icons": [
+    {
+      "src": "/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}

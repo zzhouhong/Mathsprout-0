@@ -1,0 +1,57 @@
+<!-- pages/home/home.wxml — 家长成长首页 -->
+<view class="container">
+  <!-- Loading -->
+  <view class="loading" wx:if="{{loading}}">
+    <view class="loading-text">加载中...</view>
+  </view>
+
+  <!-- Error -->
+  <view class="error-card" wx:elif="{{error}}">
+    <view class="empty-icon">📡</view>
+    <view class="empty-text">{{error}}</view>
+  </view>
+
+  <!-- Content -->
+  <block wx:else>
+    <view class="header">
+      <view class="greeting">👋 {{childName}}的成长档案</view>
+    </view>
+
+    <view class="summary-card" wx:if="{{report.has_report}}">
+      <view class="date" wx:if="{{report.generated_at}}">最近更新：{{report.generated_at}}</view>
+      <view class="summary-text">{{report.overall_summary}}</view>
+
+      <view class="strength-section" wx:if="{{report.strengths.length}}">
+        <view class="section-title">✨ 闪光时刻</view>
+        <view class="tag-list">
+          <view class="tag tag-green" wx:for="{{report.strengths}}" wx:key="area">{{item.area}}</view>
+        </view>
+      </view>
+
+      <view class="activity-section" wx:if="{{report.family_activities.length}}">
+        <view class="section-title">🎮 家庭游戏推荐</view>
+        <view class="activity-item" wx:for="{{report.family_activities}}" wx:key="title" wx:for-item="act">
+          <view class="act-title">{{act.title}}</view>
+          <view class="act-desc">{{act.materials || act.steps}}</view>
+        </view>
+      </view>
+
+      <button class="btn-outline" bindtap="goReport">查看完整报告 →</button>
+    </view>
+
+    <view class="empty-card" wx:else>
+      <view class="empty-icon">📭</view>
+      <view class="empty-text">暂无分析报告</view>
+      <view class="empty-hint">老师完成首次操作单分析后，报告将出现在这里</view>
+    </view>
+
+    <!-- Growth trend -->
+    <view class="trend-card" wx:if="{{trends.length}}">
+      <view class="section-title">📈 发展趋势</view>
+      <view class="trend-item" wx:for="{{trends}}" wx:key="dimension">
+        <view class="trend-dim">{{item.dimension}}</view>
+        <view class="trend-arrow">{{item.trend === 'up' ? '⬆️' : item.trend === 'down' ? '⬇️' : '➡️'}}</view>
+      </view>
+    </view>
+  </block>
+</view>

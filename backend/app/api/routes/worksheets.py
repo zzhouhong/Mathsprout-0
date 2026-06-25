@@ -1,0 +1,635 @@
+from fastapi import APIRouter, UploadFile, File, Form, HTTPException, Query, Depends
+from fastapi.responses import JSONResponse, StreamingResponse
+from pathlib import Path
+import uuid
+import os
+import json
+import asyncio
+from typing import Optional
+
+from app.core.config import get_settings
+from app.core.database import get_db
+from app.schemas import (
+    WorksheetUploadResponse,
+    AnalyzeRequest,
+    AgeGroupEnum,
+    UploadMethodEnum,
+    WorksheetStatusEnum,
+    CompletionContextEnum,
+    ProgressEvent,
+)
+from app.services.image_processor import ImageProcessor, resolve_image_size
+from app.services.worksheet_recognizer import WorksheetRecognizer
+from app.services.assessment_engine import assess
+from app.services.report_generator import generate_teacher_report, generate_parent_report
+from app.services.persistence_service import persist_analysis
+
+settings = get_settings()
+router = APIRouter()
+
+# Initialize services
+_resolved_target_size = resolve_image_size(
+    settings.VISION_IMAGE_SIZE,
+    fallback=settings.IMAGE_TARGET_SIZE_PX,
+)
+image_processor = ImageProcessor(
+    target_size_px=_resolved_target_size,
+    max_size_px=settings.IMAGE_MAX_SIZE_PX,
+    quality=settings.IMAGE_QUALITY,
+)
+worksheet_recognizer = WorksheetRecognizer()
+
+
+# ─── SSE Progress Helper ─────────────────────────────────────────────
+
+async def _stream_progress(steps: list):
+    """
+    Generator that yields SSE progress events.
+    Each step is an async callable that returns (step_name, status, message, progress_pct, data).
+    """
+    for i, step in enumerate(steps):
+        try:
+            result = await step["fn"]()
+            event = ProgressEvent(
+                step=step["name"],
+                status="completed",
+                message=step["complete_msg"],
+                progress_pct=step["pct"],
+                data=result if isinstance(result, dict) else None,
+            )
+        except Exception as e:
+            event = ProgressEvent(
+                step=step["name"],
+                status="error",
+                message=f"{step['name']}失败: {str(e)}",
+                progress_pct=step["pct"],
+                data={"error": str(e)},
+            )
+        yield f"data: {event.model_dump_json()}\n\n"
+
+    # Final completion event
+    final = ProgressEvent(
+        step="complete",
+        status="completed",
+        message="分析完成",
+        progress_pct=100.0,
+    )
+    yield f"data: {final.model_dump_json()}\n\n"
+
+
+# ─── Upload Endpoint ─────────────────────────────────────────────────
+
+@router.post("/upload", response_model=WorksheetUploadResponse)
+async def upload_worksheet(
+    file: UploadFile = File(...),
+    child_id: int = Form(...),
+    age_group: AgeGroupEnum = Form(...),
+    upload_method: UploadMethodEnum = Form(default=UploadMethodEnum.FILE),
+    completion_context: CompletionContextEnum = Form(default=None),
+    teacher_notes: str = Form(default=None),
+):
+    """
+    Upload a worksheet image.
+
+    Accepts: JPG, PNG, WEBP, PDF (first page rendered as image)
+    Max file size: 20MB
+    """
+    # Validate file type
+    allowed_types = [
+        "image/jpeg", "image/png", "image/webp", "application/pdf",
+    ]
+    if file.content_type not in allowed_types:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                f"不支持的文件格式。支持：JPG, PNG, WEBP, PDF "
+                f"(当前: {file.content_type})"
+            ),
+        )
+
+    # Read file
+    contents = await file.read()
+    if len(contents) > 20 * 1024 * 1024:  # 20MB limit
+        raise HTTPException(status_code=400, detail="文件大小不能超过20MB")
+
+    # Generate unique filename
+    ext = Path(file.filename).suffix if file.filename else ".jpg"
+    unique_name = f"{uuid.uuid4().hex}{ext}"
+    file_path = os.path.join(settings.UPLOAD_DIR, unique_name)
+
+    # Save file
+    with open(file_path, "wb") as f:
+        f.write(contents)
+
+    return {
+        "id": hash(unique_name) % 1000000,
+        "child_id": child_id,
+        "file_path": file_path,
+        "original_filename": file.filename,
+        "status": WorksheetStatusEnum.UPLOADED,
+        "upload_method": upload_method,
+        "created_at": None,
+    }
+
+
+# ─── Analyze Endpoint (full pipeline) ────────────────────────────────
+
+@router.post("/{worksheet_id}/analyze")
+async def analyze_worksheet(
+    worksheet_id: int,
+    request: AnalyzeRequest,
+):
+    """
+    Trigger full analysis pipeline for a worksheet:
+    1. Load worksheet from storage
+    2. Preprocess image
+    3. Call Claude Vision API for recognition
+    4. Run 4-dimension assessment
+    5. Generate teacher + parent reports
+    """
+    # Build the file path from worksheet_id (MVP: hash-based)
+    # In production, load from database
+    # For now, accept file_path from the request context
+    file_path = getattr(request, 'file_path', None)
+
+    if file_path and os.path.exists(file_path):
+        # Read the uploaded file
+        with open(file_path, "rb") as f:
+            image_bytes = f.read()
+    else:
+        # Try to find in uploads directory (fallback)
+        candidates = list(Path(settings.UPLOAD_DIR).glob(f"*"))
+        if not candidates:
+            return JSONResponse(
+                content={
+                    "status": "error",
+                    "message": (
+                        "找不到操作单文件。请先通过 POST /worksheets/upload 上传，"
+                        "或使用 POST /worksheets/demo 进行演示分析。"
+                    ),
+                },
+                status_code=404,
+            )
+        # Use most recently uploaded file
+        latest = max(candidates, key=lambda p: p.stat().st_mtime)
+        with open(latest, "rb") as f:
+            image_bytes = f.read()
+
+    # Step 1: Preprocess image
+    processed_image, processed_filename = await image_processor.process(
+        image_bytes, Path(file_path).name if file_path else "worksheet.jpg"
+    )
+
+    # Step 2: Vision recognition
+    vision_result = await worksheet_recognizer.analyze(
+        processed_image, age_group=request.age_group.value
+    )
+
+    # Step 3: Assessment
+    assessment = await assess(
+        vision_result=vision_result,
+        age_group=request.age_group.value,
+        child_name=getattr(request, 'child_name', '幼儿'),
+    )
+
+    # Step 4: Generate reports
+    teacher_report = await generate_teacher_report(
+        assessment_result=assessment,
+        child_name=getattr(request, 'child_name', '幼儿'),
+        age_group=request.age_group.value,
+        worksheet_observations=vision_result.get("observations"),
+    )
+
+    parent_report = await generate_parent_report(
+        assessment_result=assessment,
+        child_name=getattr(request, 'child_name', '幼儿'),
+        age_group=request.age_group.value,
+    )
+
+    return JSONResponse(
+        content={
+            "vision": vision_result,
+            "assessment": assessment,
+            "reports": {
+                "teacher": teacher_report,
+                "parent": parent_report,
+            },
+            "meta": vision_result.get("_meta", {}),
+        }
+    )
+
+
+# ─── SSE Streaming Analyze Endpoint ──────────────────────────────────
+
+@router.post("/{worksheet_id}/analyze-stream")
+async def analyze_worksheet_stream(
+    worksheet_id: int,
+    file: UploadFile = File(...),
+    age_group: AgeGroupEnum = Form(default=AgeGroupEnum.MIDDLE),
+    child_name: str = Form(default="幼儿"),
+):
+    """
+    Full analysis pipeline with SSE progress streaming.
+    Use this for the frontend to show real-time progress.
+
+    Events:
+    - preprocessing: 图片预处理
+    - recognizing: AI 识别操作单
+    - assessing: 4维度评估
+    - generating_report: 生成报告
+    - complete: 完成
+    """
+    # Read file once at the start
+    raw_bytes = await file.read()
+    file_name = file.filename or "worksheet.jpg"
+
+    # Build processing steps
+    state = {}
+
+    async def step_preprocess():
+        processed, name = await image_processor.process(raw_bytes, file_name)
+        state["processed_image"] = processed
+        state["processed_filename"] = name
+        return {"filename": name}
+
+    async def step_recognize():
+        processed = state.get("processed_image", raw_bytes)
+        result = await worksheet_recognizer.analyze(
+            processed, age_group=age_group.value
+        )
+        state["vision_result"] = result
+        return {
+            "worksheet_type": result.get("worksheet_type", "unknown"),
+            "problem_count": len(result.get("problems", [])),
+            "token_usage": result.get("_meta", {}).get("usage", {}),
+        }
+
+    async def step_assess():
+        vision = state["vision_result"]
+        result = await assess(
+            vision_result=vision,
+            age_group=age_group.value,
+            child_name=child_name,
+        )
+        state["assessment"] = result
+        # Return summarized assessment
+        return {
+            "dimensions": [
+                {
+                    "name": d["display_name"],
+                    "score": d["score"],
+                    "level": f"{d.get('level_emoji', '')} {d.get('level_name', '')}",
+                }
+                for d in result.get("assessment", [])
+            ],
+        }
+
+    async def step_reports():
+        assessment = state["assessment"]
+        vision = state.get("vision_result", {})
+
+        teacher = await generate_teacher_report(
+            assessment_result=assessment,
+            child_name=child_name,
+            age_group=age_group.value,
+            worksheet_observations=vision.get("observations"),
+        )
+        parent = await generate_parent_report(
+            assessment_result=assessment,
+            child_name=child_name,
+            age_group=age_group.value,
+        )
+        state["teacher_report"] = teacher
+        state["parent_report"] = parent
+        return {"report_types": ["teacher", "parent"]}
+
+    steps = [
+        {
+            "name": "preprocessing",
+            "fn": step_preprocess,
+            "complete_msg": "图片预处理完成",
+            "pct": 15.0,
+        },
+        {
+            "name": "recognizing",
+            "fn": step_recognize,
+            "complete_msg": "AI 识别完成",
+            "pct": 50.0,
+        },
+        {
+            "name": "assessing",
+            "fn": step_assess,
+            "complete_msg": "4维度评估完成",
+            "pct": 75.0,
+        },
+        {
+            "name": "generating_report",
+            "fn": step_reports,
+            "complete_msg": "双版报告生成完成",
+            "pct": 95.0,
+        },
+    ]
+
+    return StreamingResponse(
+        _stream_progress(steps),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        },
+    )
+
+
+# ─── Batch Analyze SSE Endpoint ──────────────────────────────────────
+
+@router.post("/batch/analyze-stream")
+async def batch_analyze_stream(
+    files: list[UploadFile] = File(...),
+    age_group: AgeGroupEnum = Form(default=AgeGroupEnum.MIDDLE),
+    child_name: str = Form(default="幼儿"),
+):
+    """
+    Batch analysis pipeline with SSE progress streaming.
+    Accepts up to 10 worksheet images, processes each sequentially.
+
+    SSE event types:
+    - batch_start:     {type, total}
+    - file_start:      {type, index, total, filename}
+    - file_progress:   {type, index, step, message}
+    - file_complete:   {type, index, filename, result: {assessment, reports}}
+    - file_error:      {type, index, filename, error}
+    - batch_complete:  {type, total, succeeded, failed}
+    """
+    MAX_BATCH = 10
+    if len(files) > MAX_BATCH:
+        raise HTTPException(
+            status_code=400,
+            detail=f"批量上传最多支持 {MAX_BATCH} 张图片，当前: {len(files)} 张",
+        )
+
+    async def _batch_stream():
+        total = len(files)
+        results = []
+        succeeded = 0
+        failed = 0
+
+        # Batch start
+        yield _sse({"type": "batch_start", "total": total})
+
+        for idx, f in enumerate(files):
+            filename = f.filename or f"worksheet_{idx + 1}.jpg"
+            file_idx = idx + 1  # 1-based for display
+
+            try:
+                # File start
+                yield _sse({
+                    "type": "file_start",
+                    "index": file_idx,
+                    "total": total,
+                    "filename": filename,
+                })
+
+                # Step 1: Read + Preprocess
+                yield _sse({
+                    "type": "file_progress",
+                    "index": file_idx,
+                    "step": "preprocessing",
+                    "message": f"正在预处理 ({file_idx}/{total}): {filename}",
+                })
+                raw_bytes = await f.read()
+                processed, _ = await image_processor.process(raw_bytes, filename)
+
+                # Step 2: Vision recognition
+                yield _sse({
+                    "type": "file_progress",
+                    "index": file_idx,
+                    "step": "recognizing",
+                    "message": f"AI 正在识别 ({file_idx}/{total}): {filename}",
+                })
+                vision_result = await worksheet_recognizer.analyze(
+                    processed, age_group=age_group.value
+                )
+
+                # Step 3: Assessment
+                yield _sse({
+                    "type": "file_progress",
+                    "index": file_idx,
+                    "step": "assessing",
+                    "message": f"正在评估 ({file_idx}/{total}): {filename}",
+                })
+                assessment = await assess(
+                    vision_result=vision_result,
+                    age_group=age_group.value,
+                    child_name=child_name,
+                )
+
+                # Step 4: Reports
+                yield _sse({
+                    "type": "file_progress",
+                    "index": file_idx,
+                    "step": "generating_report",
+                    "message": f"正在生成报告 ({file_idx}/{total}): {filename}",
+                })
+                teacher = await generate_teacher_report(
+                    assessment_result=assessment,
+                    child_name=child_name,
+                    age_group=age_group.value,
+                    worksheet_observations=vision_result.get("observations"),
+                )
+                parent = await generate_parent_report(
+                    assessment_result=assessment,
+                    child_name=child_name,
+                    age_group=age_group.value,
+                )
+
+                file_result = {
+                    "filename": filename,
+                    "assessment": assessment,
+                    "reports": {"teacher": teacher, "parent": parent},
+                }
+                results.append(file_result)
+                succeeded += 1
+
+                yield _sse({
+                    "type": "file_complete",
+                    "index": file_idx,
+                    "total": total,
+                    "filename": filename,
+                    "result": file_result,
+                })
+
+            except Exception as exc:
+                failed += 1
+                results.append({"filename": filename, "error": str(exc)})
+                yield _sse({
+                    "type": "file_error",
+                    "index": file_idx,
+                    "total": total,
+                    "filename": filename,
+                    "error": str(exc),
+                })
+
+        # Batch complete
+        yield _sse({
+            "type": "batch_complete",
+            "total": total,
+            "succeeded": succeeded,
+            "failed": failed,
+            "results": results,
+        })
+
+    return StreamingResponse(
+        _batch_stream(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        },
+    )
+
+
+def _sse(data: dict) -> str:
+    """Serialize a dict as an SSE data line."""
+    return f"data: {json.dumps(data, ensure_ascii=False)}\n\n"
+
+
+# ─── Demo Endpoint ───────────────────────────────────────────────────
+
+@router.post("/demo")
+async def demo_analysis(
+    file: UploadFile = File(...),
+    age_group: AgeGroupEnum = Form(default=AgeGroupEnum.SMALL),
+    child_name: str = Form(default="小明"),
+    child_id: Optional[int] = Form(default=None, description="幼儿ID，提供则持久化到数据库"),
+    db = Depends(get_db),
+):
+    """
+    Demo endpoint: Full analysis pipeline on a single image.
+    This is the MVP core endpoint — upload + preprocess + recognize + assess + report.
+
+    If child_id is provided, results are persisted to the database and linked to the child.
+    """
+    # Step 1: Read and preprocess
+    image_bytes = await file.read()
+    processed_image, processed_filename = await image_processor.process(
+        image_bytes, file.filename or "worksheet.jpg"
+    )
+
+    # Step 2: Vision recognition
+    vision_result = await worksheet_recognizer.analyze(
+        processed_image, age_group=age_group.value
+    )
+
+    # Step 3: Assessment
+    assessment = await assess(
+        vision_result=vision_result,
+        age_group=age_group.value,
+        child_name=child_name,
+    )
+
+    # Step 4: Generate reports
+    teacher_report = await generate_teacher_report(
+        assessment_result=assessment,
+        child_name=child_name,
+        age_group=age_group.value,
+        worksheet_observations=vision_result.get("observations"),
+    )
+
+    parent_report = await generate_parent_report(
+        assessment_result=assessment,
+        child_name=child_name,
+        age_group=age_group.value,
+    )
+
+    response_data = {
+        "vision": vision_result,
+        "assessment": assessment,
+        "reports": {
+            "teacher": teacher_report,
+            "parent": parent_report,
+        },
+        "meta": vision_result.get("_meta", {}),
+    }
+
+    # Step 5: Persist to DB if child_id is provided
+    if child_id is not None:
+        try:
+            persisted = await persist_analysis(
+                db=db,
+                child_id=child_id,
+                original_filename=file.filename or "worksheet.jpg",
+                image_bytes=processed_image,
+                vision_result=vision_result,
+                assessment_result=assessment,
+                teacher_report=teacher_report,
+                parent_report=parent_report,
+                age_group=age_group.value,
+            )
+            response_data["persisted"] = persisted
+        except Exception as e:
+            response_data["persist_error"] = str(e)
+
+    return JSONResponse(content=response_data)
+
+
+# ─── Worksheet Generation Endpoint ────────────────────────────────────
+
+@router.get("/generate")
+async def generate_worksheet_endpoint(
+    child_name: str = Query(default="小朋友"),
+    age_group: AgeGroupEnum = Query(default=AgeGroupEnum.MIDDLE),
+    difficulty: int = Query(default=2, ge=1, le=5),
+    dimensions: str = Query(default="counting,shapes_space"),
+    problem_count: int = Query(default=8, ge=4, le=20),
+    include_answer: bool = Query(default=True),
+    format: str = Query(default="html"),
+):
+    """
+    Generate a printable worksheet dynamically.
+    Returns HTML (for preview/print) or JSON.
+    """
+    from app.services.worksheet_generator import (
+        generate_worksheet,
+        worksheet_to_html,
+        worksheet_to_markdown,
+        WorksheetConfig,
+    )
+    from fastapi.responses import HTMLResponse
+
+    dim_list = [d.strip() for d in dimensions.split(",") if d.strip()]
+
+    config = WorksheetConfig(
+        child_name=child_name,
+        age_group=age_group.value,
+        difficulty_level=difficulty,
+        dimensions=dim_list,
+        problem_count=problem_count,
+        include_answer_key=include_answer,
+    )
+
+    worksheet = generate_worksheet(config)
+
+    if format == "html":
+        html = worksheet_to_html(worksheet)
+        return HTMLResponse(content=html)
+    elif format == "markdown":
+        md = worksheet_to_markdown(worksheet)
+        return JSONResponse(content={"markdown": md, "answer_key": worksheet.answer_key})
+    else:
+        return JSONResponse(content={
+            "title": worksheet.title,
+            "child_name": worksheet.child_name,
+            "difficulty_level": worksheet.difficulty_level,
+            "problems": [
+                {
+                    "number": p.number,
+                    "type": p.type,
+                    "prompt": p.prompt,
+                    "dimension": p.dimension,
+                }
+                for p in worksheet.problems
+            ],
+            "answer_key": worksheet.answer_key,
+        })
