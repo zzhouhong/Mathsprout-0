@@ -17,6 +17,7 @@ v2.0 — enriched with full textbook data:
 
 from enum import Enum
 from typing import Dict, List, Optional
+import re
 
 
 class AgeGroup(str, Enum):
@@ -1206,19 +1207,44 @@ SUBTITIZING_INFO: Dict[str, Dict] = {
 # Level determination & display helpers
 # ═══════════════════════════════════════════════════════════════════════
 
+# Age-group-anchored score→level thresholds.
+# Younger children have lower bars (lenient), older children have higher bars (strict).
+# Rationale: a small-class child getting 6/10 correct is doing well (L3),
+#            a large-class child getting 6/10 needs more support (L2).
+AGE_LEVEL_THRESHOLDS: Dict[str, Dict[str, int]] = {
+    AgeGroup.SMALL:  {"L4": 85, "L3": 60, "L2": 30},   # lenient — younger kids, lower bar
+    AgeGroup.MIDDLE: {"L4": 90, "L3": 70, "L2": 40},   # standard
+    AgeGroup.LARGE:  {"L4": 95, "L3": 80, "L2": 50},   # strict — older kids, higher bar
+}
+
+
 def determine_level(score: float, age_group: str = None, dimension: str = None) -> DevLevel:
     """
-    Determine development level based on score percentage.
+    Determine development level based on score percentage, with age-group-anchored thresholds.
 
-    The same score can yield different levels for different age groups
-    (e.g., 5/5 correct for small class → L4, for large class → L2).
-    Future enhancement: age-group-anchored thresholds using ASSESSMENT_INDICATORS.
+    The same score yields different levels for different age groups:
+      - A small-class child scoring 50% → L2 (adequate for age)
+      - A large-class child scoring 50% → L1 (below age expectation)
+
+    When age_group is None, falls back to legacy uniform thresholds (91/71/41).
 
     Args:
         score: percentage score 0-100
-        age_group: optional age group for anchored scoring
-        dimension: optional dimension for anchored scoring
+        age_group: optional age group ("small"|"middle"|"large") for anchored scoring
+        dimension: optional dimension for future per-dimension fine-tuning
     """
+    if age_group and age_group in AGE_LEVEL_THRESHOLDS:
+        thresholds = AGE_LEVEL_THRESHOLDS[age_group]
+        if score >= thresholds["L4"]:
+            return DevLevel.L4_ADVANCED
+        elif score >= thresholds["L3"]:
+            return DevLevel.L3_PROFICIENT
+        elif score >= thresholds["L2"]:
+            return DevLevel.L2_GROWING
+        else:
+            return DevLevel.L1_SPROUT
+
+    # Legacy fallback — uniform thresholds (backward compatible)
     if score >= 91:
         return DevLevel.L4_ADVANCED
     elif score >= 71:
@@ -1314,6 +1340,194 @@ def get_age_display_name(age_group: str) -> str:
         AgeGroup.LARGE: "大班（5-6岁）",
     }
     return names.get(age_group, age_group)
+
+
+# ═══════════════════════════════════════════════════════════════════════
+# Core-experience targeting — map a worksheet's printed learning objective
+# (recognized by vision) to the 13 sub-dimensions (= the 13 "核心经验").
+# Used by assessment_engine to build the "本操作单指向核心经验" conclusion.
+# ═══════════════════════════════════════════════════════════════════════
+
+# Each keyword maps to one sub-dimension. Keywords are matched as substrings
+# against the learning_objective text. Keep keywords specific enough to
+# avoid cross-noise (e.g. "拼搭/拼成" → shape_composition, not number_composition).
+LEARNING_OBJECTIVE_KEYWORDS: Dict[str, str] = {
+    # ── 数概念与运算 ──
+    "点数": SubDimension.COUNTING_ACCURACY,
+    "数数": SubDimension.COUNTING_ACCURACY,
+    "计数": SubDimension.COUNTING_ACCURACY,
+    "唱数": SubDimension.COUNTING_ACCURACY,
+    "点一点": SubDimension.COUNTING_ACCURACY,
+    "数一数": SubDimension.COUNTING_ACCURACY,
+    "说出总数": SubDimension.COUNTING_ACCURACY,
+    "手口一致": SubDimension.COUNTING_ACCURACY,
+    "多少": SubDimension.QUANTITY_COMPARISON,
+    "一样多": SubDimension.QUANTITY_COMPARISON,
+    "比较数量": SubDimension.QUANTITY_COMPARISON,
+    "多几个": SubDimension.QUANTITY_COMPARISON,
+    "少几个": SubDimension.QUANTITY_COMPARISON,
+    "比一比": SubDimension.QUANTITY_COMPARISON,
+    "守恒": SubDimension.QUANTITY_COMPARISON,
+    "分解": SubDimension.NUMBER_COMPOSITION,
+    "组成": SubDimension.NUMBER_COMPOSITION,
+    "分合": SubDimension.NUMBER_COMPOSITION,
+    "分成": SubDimension.NUMBER_COMPOSITION,
+    "合起来": SubDimension.NUMBER_COMPOSITION,
+    "凑十": SubDimension.NUMBER_COMPOSITION,
+    "凑10": SubDimension.NUMBER_COMPOSITION,
+    "添上": SubDimension.CONCRETE_OPERATION,
+    "拿走": SubDimension.CONCRETE_OPERATION,
+    "增加": SubDimension.CONCRETE_OPERATION,
+    "减少": SubDimension.CONCRETE_OPERATION,
+    "变多": SubDimension.CONCRETE_OPERATION,
+    "变少": SubDimension.CONCRETE_OPERATION,
+    "实物加减": SubDimension.CONCRETE_OPERATION,
+    "加法": SubDimension.CONCRETE_OPERATION,
+    "减法": SubDimension.CONCRETE_OPERATION,
+    "加减": SubDimension.CONCRETE_OPERATION,
+    "算式": SubDimension.SYMBOLIC_OPERATION,
+    "列式": SubDimension.SYMBOLIC_OPERATION,
+    "加号": SubDimension.SYMBOLIC_OPERATION,
+    "减号": SubDimension.SYMBOLIC_OPERATION,
+    "等号": SubDimension.SYMBOLIC_OPERATION,
+    "符号运算": SubDimension.SYMBOLIC_OPERATION,
+    "互逆": SubDimension.SYMBOLIC_OPERATION,
+    # ── 图形与空间 ──
+    "三角形": SubDimension.SHAPE_RECOGNITION,
+    "圆形": SubDimension.SHAPE_RECOGNITION,
+    "正方形": SubDimension.SHAPE_RECOGNITION,
+    "长方形": SubDimension.SHAPE_RECOGNITION,
+    "梯形": SubDimension.SHAPE_RECOGNITION,
+    "椭圆": SubDimension.SHAPE_RECOGNITION,
+    "半圆": SubDimension.SHAPE_RECOGNITION,
+    "图形识别": SubDimension.SHAPE_RECOGNITION,
+    "认识图形": SubDimension.SHAPE_RECOGNITION,
+    "命名": SubDimension.SHAPE_RECOGNITION,
+    "变式": SubDimension.SHAPE_RECOGNITION,
+    "图形特征": SubDimension.SHAPE_RECOGNITION,
+    "拼搭": SubDimension.SHAPE_COMPOSITION,
+    "拼图": SubDimension.SHAPE_COMPOSITION,
+    "拼成": SubDimension.SHAPE_COMPOSITION,
+    "拼一拼": SubDimension.SHAPE_COMPOSITION,
+    "七巧板": SubDimension.SHAPE_COMPOSITION,
+    "嵌板": SubDimension.SHAPE_COMPOSITION,
+    "图形组合": SubDimension.SHAPE_COMPOSITION,
+    "等分": SubDimension.SHAPE_COMPOSITION,
+    "上下": SubDimension.SPATIAL_AWARENESS,
+    "前后": SubDimension.SPATIAL_AWARENESS,
+    "里外": SubDimension.SPATIAL_AWARENESS,
+    "左右": SubDimension.SPATIAL_AWARENESS,
+    "方位": SubDimension.SPATIAL_AWARENESS,
+    "位置": SubDimension.SPATIAL_AWARENESS,
+    "空间": SubDimension.SPATIAL_AWARENESS,
+    "方向": SubDimension.SPATIAL_AWARENESS,
+    "远近": SubDimension.SPATIAL_AWARENESS,
+    "高低": SubDimension.SPATIAL_AWARENESS,
+    "立体": SubDimension.SOLID_RECOGNITION,
+    "球体": SubDimension.SOLID_RECOGNITION,
+    "圆柱": SubDimension.SOLID_RECOGNITION,
+    "正方体": SubDimension.SOLID_RECOGNITION,
+    "长方体": SubDimension.SOLID_RECOGNITION,
+    "面在体上": SubDimension.SOLID_RECOGNITION,
+    # ── 集合与模式 ──
+    "分类": SubDimension.CLASSIFICATION,
+    "归类": SubDimension.CLASSIFICATION,
+    "找相同": SubDimension.CLASSIFICATION,
+    "集合": SubDimension.CLASSIFICATION,
+    "类包含": SubDimension.CLASSIFICATION,
+    "模式": SubDimension.PATTERN_RECOGNITION,
+    "规律": SubDimension.PATTERN_RECOGNITION,
+    "重复": SubDimension.PATTERN_RECOGNITION,
+    "排列": SubDimension.PATTERN_RECOGNITION,
+    "找规律": SubDimension.PATTERN_RECOGNITION,
+    "扩展": SubDimension.PATTERN_EXTENSION,
+    "接着": SubDimension.PATTERN_EXTENSION,
+    "下一个": SubDimension.PATTERN_EXTENSION,
+    "补全": SubDimension.PATTERN_EXTENSION,
+    "填空": SubDimension.PATTERN_EXTENSION,
+    "排序": SubDimension.SORTING,
+    "从大到小": SubDimension.SORTING,
+    "从小到大": SubDimension.SORTING,
+    "从长到短": SubDimension.SORTING,
+    "从短到长": SubDimension.SORTING,
+    "排排队": SubDimension.SORTING,
+    "长短": SubDimension.SORTING,
+    "大小顺序": SubDimension.SORTING,
+}
+
+
+# Compiled once: alternation of all keywords sorted by length descending so
+# the regex engine prefers the longest keyword at each position (longest-match
+# disambiguation, e.g. '圆柱' wins over '圆' inside '圆柱体').
+_LO_KEYWORD_SORTED = sorted(LEARNING_OBJECTIVE_KEYWORDS.keys(), key=len, reverse=True)
+_LO_PATTERN = re.compile("|".join(re.escape(k) for k in _LO_KEYWORD_SORTED))
+
+
+def _classify_by_keywords(text: str) -> List[str]:
+    """Return de-duplicated sub-dimensions matched in `text` (ordered by enum).
+
+    Uses a regex alternation of all keywords sorted by length descending so
+    that longer keywords win at a given position (e.g. '圆柱体' matches
+    '圆柱'→立体认知, not the bare '圆'→图形识别). Non-overlapping left-to-right.
+    """
+    if not text:
+        return []
+    matched = set()
+    for m in _LO_PATTERN.finditer(text):
+        matched.add(LEARNING_OBJECTIVE_KEYWORDS[m.group()])
+    # Preserve canonical enum order for stable output
+    return [sd for sd in SubDimension if sd in matched]
+
+
+def classify_core_experiences(
+    worksheet_text: str,
+    problems: List[dict],
+) -> List[Dict]:
+    """
+    Determine which core experiences (sub-dimensions) a worksheet targets.
+
+    Two signals, unioned:
+      - assessed: sub-dimensions actually present via problem types
+        (PROBLEM_TYPE_TO_SUB_DIMENSION) — the worksheet directly tests these.
+      - pointed: sub-dimensions inferred from the worksheet's printed text
+        (learning objective + title + instructions) via
+        LEARNING_OBJECTIVE_KEYWORDS — the worksheet intends these, even if
+        no problem of that type was recognized.
+
+    `worksheet_text` should be a combined string of the worksheet's printed
+    learning_objective / title / instructions (caller assembles it); the
+    longest-match regex disambiguates overlapping keywords.
+
+    Returns a list (ordered: assessed first in enum order, then pointed-only)
+    of dicts:
+      {sub_dimension, dimension, source: "assessed"|"pointed"}
+    """
+    assessed_set = set()
+    for p in problems or []:
+        sd = PROBLEM_TYPE_TO_SUB_DIMENSION.get(p.get("type", ""))
+        if sd:
+            assessed_set.add(sd)
+
+    pointed = _classify_by_keywords(worksheet_text)
+
+    # Union, assessed-first, canonical enum order within each group
+    targets = []
+    for sd in SubDimension:
+        if sd in assessed_set:
+            targets.append({
+                "sub_dimension": sd,
+                "dimension": SUB_DIMENSION_TO_DIMENSION.get(sd, ""),
+                "source": "assessed",
+            })
+    assessed_only = set(t["sub_dimension"] for t in targets)
+    for sd in pointed:
+        if sd not in assessed_only:
+            targets.append({
+                "sub_dimension": sd,
+                "dimension": SUB_DIMENSION_TO_DIMENSION.get(sd, ""),
+                "source": "pointed",
+            })
+    return targets
 
 
 # ═══════════════════════════════════════════════════════════════════════

@@ -1,0 +1,17 @@
+{
+  "description": "全错场景 — 大班幼儿全部答错，验证 L1 判定和错误模式检测",
+  "child": "小迷糊",
+  "age": "large",
+  "vision": {
+    "worksheet_type": "mixed",
+    "problems": [
+      {"id": "P1", "type": "counting", "child_answer": "3", "correct_answer": "8", "is_correct": false, "confidence": 0.8, "handwriting_quality": "clear", "has_erasure": true, "erasure_pattern": "persistent_error", "strategy_indicators": "counting_objects"},
+      {"id": "P2", "type": "counting", "child_answer": "2", "correct_answer": "6", "is_correct": false, "confidence": 0.75, "handwriting_quality": "clear", "has_erasure": false, "erasure_pattern": "none", "strategy_indicators": "counting_objects"},
+      {"id": "P3", "type": "add_10", "child_answer": "12", "correct_answer": "5", "is_correct": false, "confidence": 0.7, "handwriting_quality": "clear", "has_erasure": false, "erasure_pattern": "none", "strategy_indicators": "counting_objects"},
+      {"id": "P4", "type": "sub_10", "child_answer": "8", "correct_answer": "3", "is_correct": false, "confidence": 0.75, "handwriting_quality": "clear", "has_erasure": false, "erasure_pattern": "none", "strategy_indicators": "counting_objects"},
+      {"id": "P5", "type": "shape_id", "child_answer": "正方形", "correct_answer": "圆形", "is_correct": false, "confidence": 0.8, "handwriting_quality": "clear", "has_erasure": false, "erasure_pattern": "none", "strategy_indicators": ""},
+      {"id": "P6", "type": "spatial", "child_answer": "下面", "correct_answer": "上面", "is_correct": false, "confidence": 0.7, "handwriting_quality": "clear", "has_erasure": false, "erasure_pattern": "none", "strategy_indicators": ""}
+    ],
+    "observations": {"overall_pck_notes": "幼儿在各维度均有较大困难，仍依赖实物操作策略"}
+  }
+}

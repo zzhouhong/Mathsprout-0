@@ -17,6 +17,7 @@ from app.schemas import (
     WorksheetStatusEnum,
     CompletionContextEnum,
     ProgressEvent,
+    ConfirmAnswersRequest,
 )
 from app.services.image_processor import ImageProcessor, resolve_image_size
 from app.services.worksheet_recognizer import WorksheetRecognizer
@@ -529,19 +530,31 @@ async def demo_analysis(
         child_name=child_name,
     )
 
+    # B6/B8: build child memory BEFORE persisting (so it reflects prior state)
+    from app.services.memory_service import build_child_memory
+    child_memory = None
+    if child_id is not None:
+        child_memory = await build_child_memory(db, child_id)
+
     # Step 4: Generate reports
     teacher_report = await generate_teacher_report(
         assessment_result=assessment,
         child_name=child_name,
         age_group=age_group.value,
         worksheet_observations=vision_result.get("observations"),
+        child_memory=child_memory,
     )
 
     parent_report = await generate_parent_report(
         assessment_result=assessment,
         child_name=child_name,
         age_group=age_group.value,
+        child_memory=child_memory,
     )
+
+    # Step 5: Generate evaluation trace (per-problem PCK indicator mapping)
+    from app.services.assessment_engine import generate_evaluation_trace
+    evaluation_trace = generate_evaluation_trace(vision_result, age_group.value, child_name)
 
     response_data = {
         "vision": vision_result,
@@ -550,10 +563,11 @@ async def demo_analysis(
             "teacher": teacher_report,
             "parent": parent_report,
         },
+        "evaluation_trace": evaluation_trace,
         "meta": vision_result.get("_meta", {}),
     }
 
-    # Step 5: Persist to DB if child_id is provided
+    # Step 6: Persist to DB if child_id is provided
     if child_id is not None:
         try:
             persisted = await persist_analysis(
@@ -574,6 +588,154 @@ async def demo_analysis(
     return JSONResponse(content=response_data)
 
 
+# ─── Teacher Confirmation Endpoints ────────────────────────────────────
+
+@router.post("/recognize")
+async def recognize_worksheet(
+    file: UploadFile = File(...),
+    age_group: AgeGroupEnum = Form(default=AgeGroupEnum.SMALL),
+    child_name: str = Form(default="幼儿"),
+):
+    """
+    Recognize-only endpoint: preprocess + 3-pass vision recognition.
+    Stops before assessment so the teacher can review/correct answers.
+
+    Returns the full vision_result for display in the TeacherReviewPanel.
+    """
+    # Step 1: Read and preprocess
+    image_bytes = await file.read()
+    processed_image, processed_filename = await image_processor.process(
+        image_bytes, file.filename or "worksheet.jpg"
+    )
+
+    # Step 2: 3-pass vision recognition
+    vision_result = await worksheet_recognizer.analyze(
+        processed_image, age_group=age_group.value
+    )
+
+    return JSONResponse(content={
+        "vision": vision_result,
+        "meta": vision_result.get("_meta", {}),
+    })
+
+
+@router.post("/confirm")
+async def confirm_answers(
+    request: ConfirmAnswersRequest,
+    db = Depends(get_db),
+):
+    """
+    Accept teacher-confirmed/corrected answers, re-run assessment engine
+    and report generation. No AI calls — pure computation.
+
+    Returns updated assessment, teacher report, and parent report.
+    """
+    # Build a vision_result-like dict from confirmed problems
+    problems_dicts = [
+        {
+            "id": p.id,
+            "type": p.type.value if hasattr(p.type, 'value') else p.type,
+            "child_answer": p.child_answer,
+            "correct_answer": p.correct_answer,
+            "is_correct": p.is_correct,
+            "confidence": p.confidence,
+            "handwriting_quality": p.handwriting_quality.value if hasattr(p.handwriting_quality, 'value') else p.handwriting_quality,
+            "has_erasure": p.has_erasure,
+            "erasure_pattern": p.erasure_pattern.value if hasattr(p.erasure_pattern, 'value') else p.erasure_pattern,
+            "strategy_indicators": p.strategy_indicators or "",
+        }
+        for p in request.problems
+    ]
+
+    vision_result = {
+        "worksheet_type": "mixed",
+        "age_group_hint": request.age_group.value,
+        "problems": problems_dicts,
+        "observations": request.observations or {},
+        "dimension_scores_preliminary": {},
+    }
+
+    # Step 1: Re-run assessment with corrected answers (no AI)
+    assessment = await assess(
+        vision_result=vision_result,
+        age_group=request.age_group.value,
+        child_name=request.child_name,
+    )
+
+    # B6/B8: build child memory to surface "我记得这个孩子" + "对比上次"
+    from app.services.memory_service import build_child_memory
+    child_memory = None
+    if request.child_id is not None:
+        child_memory = await build_child_memory(db, request.child_id)
+
+    # Step 2: Re-generate reports (no AI)
+    teacher_report = await generate_teacher_report(
+        assessment_result=assessment,
+        child_name=request.child_name,
+        age_group=request.age_group.value,
+        worksheet_observations=request.observations,
+        child_memory=child_memory,
+    )
+
+    parent_report = await generate_parent_report(
+        assessment_result=assessment,
+        child_name=request.child_name,
+        age_group=request.age_group.value,
+        child_memory=child_memory,
+    )
+
+    # Step 3: Regenerate evaluation trace (per-problem PCK indicator mapping)
+    # so the teacher-review → confirm flow also surfaces the 13-sub-dimension
+    # breakdown in the UI (previously dropped entirely on confirm).
+    from app.services.assessment_engine import generate_evaluation_trace
+    evaluation_trace = generate_evaluation_trace(
+        vision_result, request.age_group.value, request.child_name
+    )
+
+    return JSONResponse(content={
+        "assessment": assessment,
+        "reports": {
+            "teacher": teacher_report,
+            "parent": parent_report,
+        },
+        "evaluation_trace": evaluation_trace,
+    })
+
+
+# ─── Adaptive Difficulty Recommendation (B5) ──────────────────────────
+
+@router.get("/recommend-difficulty")
+async def recommend_difficulty_endpoint(
+    child_id: int = Query(...),
+    db = Depends(get_db),
+):
+    """
+    Recommend a worksheet difficulty level for a child based on their
+    assessment history. Drives the 'auto-pick' badge on the generator page.
+    """
+    from app.services.memory_service import build_child_memory, recommend_difficulty
+
+    memory = await build_child_memory(db, child_id)
+    if memory is None:
+        raise HTTPException(status_code=404, detail="幼儿不存在")
+
+    rec = recommend_difficulty(memory)
+    weak_dims = [
+        {"dimension": w["dimension"], "display_name": w["display_name"], "score": w["latest_score"]}
+        for w in memory.get("weak_dimensions", [])
+    ]
+    return {
+        "child_id": child_id,
+        "child_name": memory.get("child_name"),
+        "has_memory": memory.get("has_memory", False),
+        "last_accuracy": memory.get("last_accuracy"),
+        "session_count": memory.get("session_count", 0),
+        "level": rec["level"],
+        "reason": rec["reason"],
+        "weak_dimensions": weak_dims,
+    }
+
+
 # ─── Worksheet Generation Endpoint ────────────────────────────────────
 
 @router.get("/generate")
@@ -585,10 +747,17 @@ async def generate_worksheet_endpoint(
     problem_count: int = Query(default=8, ge=4, le=20),
     include_answer: bool = Query(default=True),
     format: str = Query(default="html"),
+    child_id: Optional[int] = Query(default=None),
+    auto_difficulty: bool = Query(default=False),
+    db = Depends(get_db),
 ):
     """
     Generate a printable worksheet dynamically.
     Returns HTML (for preview/print) or JSON.
+
+    When child_id + auto_difficulty are provided, the difficulty is derived
+    from the child's assessment history (B5) and weak dimensions are injected
+    into dimension selection (B6).
     """
     from app.services.worksheet_generator import (
         generate_worksheet,
@@ -596,20 +765,37 @@ async def generate_worksheet_endpoint(
         worksheet_to_markdown,
         WorksheetConfig,
     )
+    from app.services.memory_service import build_child_memory, recommend_difficulty
     from fastapi.responses import HTMLResponse
 
     dim_list = [d.strip() for d in dimensions.split(",") if d.strip()]
 
+    # B5/B6: pull child memory to drive difficulty + weak-dimension targeting
+    child_memory = None
+    resolved_difficulty = difficulty
+    difficulty_reason = None
+    if child_id is not None:
+        child_memory = await build_child_memory(db, child_id)
+        if child_memory and child_memory.get("has_memory") and auto_difficulty:
+            rec = recommend_difficulty(child_memory)
+            resolved_difficulty = rec["level"]
+            difficulty_reason = rec["reason"]
+            # B6: if caller used default dimensions, target prior weak dims
+            if not dimensions or dimensions == "counting,shapes_space":
+                weak_dims = [w["dimension"] for w in child_memory.get("weak_dimensions", [])]
+                if weak_dims:
+                    dim_list = weak_dims[:2]
+
     config = WorksheetConfig(
         child_name=child_name,
         age_group=age_group.value,
-        difficulty_level=difficulty,
+        difficulty_level=resolved_difficulty,
         dimensions=dim_list,
         problem_count=problem_count,
         include_answer_key=include_answer,
     )
 
-    worksheet = generate_worksheet(config)
+    worksheet = generate_worksheet(config, child_memory=child_memory)
 
     if format == "html":
         html = worksheet_to_html(worksheet)

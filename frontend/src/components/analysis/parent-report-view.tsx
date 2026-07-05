@@ -37,24 +37,41 @@ export function ParentReportView({ report, reportId }: ParentReportViewProps) {
           <h2 className="text-lg font-bold text-slate-800">家长报告</h2>
           <Badge className="bg-green-100 text-green-700 text-xs">温暖·鼓励</Badge>
         </div>
-        {reportId && (
-          <button
-            onClick={handleDownloadPdf}
-            disabled={downloading}
-            className="inline-flex items-center gap-1.5 rounded-lg border border-green-200 bg-green-50 px-3 py-1.5 text-xs font-medium text-green-700 hover:bg-green-100 disabled:opacity-50 transition-colors"
-          >
-            {downloading ? (
-              <>⏳ 生成中...</>
-            ) : (
-              <>📥 导出PDF</>
-            )}
-          </button>
-        )}
+        <button
+          onClick={reportId ? handleDownloadPdf : () => window.print()}
+          disabled={downloading}
+          title={reportId ? "下载PDF报告" : "打印当前页面（浏览器打印功能）"}
+          className="inline-flex items-center gap-1.5 rounded-lg border border-green-200 bg-green-50 px-3 py-1.5 text-xs font-medium text-green-700 hover:bg-green-100 disabled:opacity-50 transition-colors"
+        >
+          {downloading ? (
+            <>⏳ 生成中...</>
+          ) : reportId ? (
+            <>📥 导出PDF</>
+          ) : (
+            <>🖨️ 打印报告</>
+          )}
+        </button>
       </div>
       {downloadError && (
         <p className="text-xs text-red-500 mb-2">⚠️ {downloadError}</p>
       )}
       <Separator className="mb-4" />
+
+      {/* B6: parent memory card — warm, encouraging framing */}
+      {report.parent_memory_card && report.parent_memory_card.remembered && (
+        <div className="p-4 rounded-xl mb-4 border border-pink-200 bg-gradient-to-br from-pink-50 to-rose-50">
+          <div className="flex items-center gap-2 mb-2">
+            <span className="text-base">💖</span>
+            <h4 className="text-sm font-semibold text-pink-700">萌芽还记得宝宝哦</h4>
+            <span className="text-[10px] text-pink-500 bg-white/70 px-2 py-0.5 rounded-full">
+              第 {report.parent_memory_card.session_count} 次见面
+            </span>
+          </div>
+          <p className="text-sm text-slate-700 leading-relaxed">
+            {report.parent_memory_card.summary}
+          </p>
+        </div>
+      )}
 
       {/* Overall Summary */}
       <div className="p-4 bg-green-50 rounded-xl mb-4">

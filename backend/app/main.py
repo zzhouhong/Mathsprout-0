@@ -4,8 +4,18 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.responses import JSONResponse
 from contextlib import asynccontextmanager
 import os
+import sys
 import time
 import logging
+
+# ─── Force UTF-8 stdout/stderr (Windows console defaults to GBK) ─────
+# Prevents UnicodeEncodeError crashes when print() emits emoji or other
+# non-GBK symbols (e.g. ⚠️ → ✓). Safe no-op if the stream can't reconfigure.
+for _s in (sys.stdout, sys.stderr):
+    try:
+        _s.reconfigure(encoding="utf-8", errors="replace")
+    except (AttributeError, ValueError):
+        pass
 
 from app.core.config import get_settings
 from app.core.database import init_db, async_session

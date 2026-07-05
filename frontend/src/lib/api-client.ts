@@ -77,11 +77,26 @@ async function request<T>(
   });
 
   if (!res.ok) {
-    const errBody = await res.json().catch(() => ({ detail: `HTTP ${res.status}` }));
-    const detail = errBody.detail || errBody.message || `请求失败 (${res.status})`;
-    const error = new Error(detail) as Error & { status: number; errors?: unknown[] };
+    const errText = await res.text().catch(() => "");
+    let errBody: Record<string, unknown> = {};
+    try {
+      errBody = JSON.parse(errText);
+    } catch {
+      // Not JSON — use raw text as detail
+    }
+    // Extract the most informative error message from known fields
+    const detail =
+      (errBody.detail as string) ||
+      (errBody.message as string) ||
+      (errBody.error as string) ||
+      (Array.isArray(errBody.errors) && (errBody.errors as Array<{ msg?: string; message?: string }>)
+        .map((e) => e.msg || e.message || "").filter(Boolean).join("; ")) ||
+      (errText && errText.slice(0, 200)) ||
+      `请求失败 (HTTP ${res.status})`;
+    const error = new Error(detail) as Error & { status: number; errors?: unknown[]; rawBody?: string };
     error.status = res.status;
-    error.errors = errBody.validation_errors;
+    error.errors = (errBody.validation_errors as unknown[]) || (errBody.errors as unknown[]);
+    error.rawBody = errText || undefined;
     throw error;
   }
 
@@ -118,6 +133,18 @@ export interface VisionResult {
   };
 }
 
+export interface SubDimensionScore {
+  sub_dimension: string;
+  name: string;
+  score: number;
+  max_score: number;
+  assessed: boolean;
+  correct: number;
+  total: number;
+  indicator?: string;
+  why_this_matters?: string;
+}
+
 export interface DimensionAssessment {
   dimension: string;
   display_name: string;
@@ -127,6 +154,7 @@ export interface DimensionAssessment {
   level_emoji: string;
   pck_stage: string;
   sub_skills: Array<{ name: string; score: number; max_score: number }>;
+  sub_dimensions: SubDimensionScore[];
   error_patterns: string[];
   age_benchmark_comparison: string;
   age_milestones: string;
@@ -167,16 +195,103 @@ export interface AssessmentResult {
   overall_summary: string;
 }
 
+export interface RadarChartData {
+  labels: string[];
+  datasets: Array<{
+    label: string;
+    data: number[];
+    fill: boolean;
+    backgroundColor: string;
+    borderColor: string;
+    pointBackgroundColor: string[];
+    pointRadius: number;
+  }>;
+  age_expectation: {
+    label: string;
+    data: number[];
+    borderColor: string;
+    borderDash: number[];
+    pointRadius: number;
+  };
+}
+
+export interface CoreExperienceTarget {
+  sub_dimension: string;
+  name: string;
+  dimension: string;
+  dimension_name: string;
+  source: "assessed" | "pointed";
+  indicator: string;
+  why_this_matters: string;
+  evidence_examples: string[];
+  teaching_tips: string;
+  // present only when source === "assessed"
+  level?: string;
+  level_name?: string;
+  level_emoji?: string;
+  score?: number;
+  correct?: number;
+  total?: number;
+}
+
+export interface CoreExperienceSupport {
+  dimension_name: string;
+  source: string;
+  strategy: string;
+  observation_points: string[];
+  materials: string;
+  level?: string;
+  level_name?: string;
+  level_emoji?: string;
+  score?: number;
+}
+
+export interface TeachingSuggestion {
+  current_stage: string;
+  level: string;
+  recommendations: string;
+  next_stage_goal: string;
+  classroom_activities: string;
+  materials_suggestion: string;
+  comparison_to_last?: string | null;
+}
+
+export interface ChildMemoryCard {
+  remembered: boolean;
+  last_seen: string;
+  session_count: number;
+  summary: string;
+  weak_then: Array<{ dimension: string; display_name: string; score: number }>;
+  weak_now: Array<{ dimension: string; display_name: string; score: number; level: string }>;
+  improving: Array<{
+    dimension: string; display_name: string; prior_score: number;
+    current_score: number; delta: number;
+    resolved_errors: string[]; persisted_errors: string[];
+  }>;
+  still_struggling: Array<{
+    dimension: string; display_name: string; prior_score: number;
+    current_score: number; delta: number;
+    resolved_errors: string[]; persisted_errors: string[];
+  }>;
+}
+
 export interface TeacherReport {
   child_name: string;
   age_group: string;
   generated_at: string;
   dimensions: DimensionAssessment[];
-  radar_chart_data: Record<string, unknown>;
+  radar_chart_data: RadarChartData;
   pck_analysis: string;
   typical_errors_diagnosis: string[];
-  teaching_suggestions: Record<string, unknown>;
+  teaching_suggestions: Record<string, TeachingSuggestion>;
+  core_experience_analysis: {
+    learning_objective: string;
+    targets: CoreExperienceTarget[];
+    summary: string;
+  };
+  core_experience_support: Record<string, CoreExperienceSupport>;
   teaching_reflection_questions: string[];
+  child_memory_card?: ChildMemoryCard | null;
   overall_summary: string;
   report_type: "teacher";
   report_id?: number;
@@ -207,6 +322,7 @@ export interface ParentReport {
   }>;
   learning_quality_notes: string;
   parent_tips: string;
+  parent_memory_card?: { remembered: boolean; session_count: number; summary: string; progressed_areas: string[] } | null;
   report_type: "parent";
   report_id?: number;
 }
@@ -296,7 +412,45 @@ interface DemoAnalysisResponse {
     teacher: TeacherReport;
     parent: ParentReport;
   };
+  evaluation_trace?: Record<string, unknown>;
   meta: { model: string; usage: Record<string, number> };
+}
+
+// ─── Teacher Confirmation Types ─────────────────────────────────────
+
+/** A problem entry shown for teacher review — child_answer is editable. */
+export interface ProblemForReview {
+  id: string;
+  type: string;
+  child_answer: string;
+  correct_answer: string;
+  is_correct: boolean;
+  confidence: number;
+  handwriting_quality: string;
+  has_erasure: boolean;
+  erasure_pattern: string;
+  strategy_indicators?: string;
+}
+
+export interface ConfirmAnswersRequest {
+  child_name: string;
+  age_group: string;
+  problems: ProblemForReview[];
+  observations?: Record<string, unknown>;
+  child_id?: number | null;
+}
+
+export interface ConfirmAnswersResponse {
+  assessment: AssessmentResult;
+  reports: {
+    teacher: TeacherReport;
+    parent: ParentReport;
+  };
+}
+
+export interface RecognizeResponse {
+  vision: VisionResult;
+  meta?: Record<string, unknown>;
 }
 
 // ─── API object ─────────────────────────────────────────────────────
@@ -441,6 +595,21 @@ export const api = {
   // ── Worksheets ──────────────────────────────────────────────────
 
   worksheets: {
+    /** B5: fetch auto-recommended difficulty for a child from their assessment history. */
+    async recommendDifficulty(childId: number) {
+      const params = new URLSearchParams({ child_id: String(childId) });
+      return request<{
+        child_id: number;
+        child_name: string;
+        has_memory: boolean;
+        last_accuracy: number | null;
+        session_count: number;
+        level: number;
+        reason: string;
+        weak_dimensions: Array<{ dimension: string; display_name: string; score: number }>;
+      }>(`/api/v1/worksheets/recommend-difficulty?${params}`);
+    },
+
     async uploadAndAnalyze(file: File, ageGroup: string, childName: string, childId?: number) {
       const formData = new FormData();
       formData.append("file", file);
@@ -583,6 +752,37 @@ export const api = {
         reader.releaseLock();
       }
     },
+
+    /** Phase 1: Recognize only — returns vision result for teacher review. */
+    async recognize(file: File, ageGroup: string, childName: string) {
+      const formData = new FormData();
+      formData.append("file", file);
+      formData.append("age_group", ageGroup);
+      formData.append("child_name", childName);
+      return request<RecognizeResponse>("/api/v1/worksheets/recognize", {
+        method: "POST",
+        body: formData,
+      });
+    },
+
+    /** Phase 2: Confirm corrected answers — runs assessment + reports. */
+    async confirm(data: ConfirmAnswersRequest) {
+      return request<ConfirmAnswersResponse>("/api/v1/worksheets/confirm", {
+        method: "POST",
+        body: JSON.stringify(data),
+      });
+    },
+
+    /** Fetch evaluation trace for a real analysis. */
+    async traceByAnalysis(analysisId: number) {
+      return request<any>(`/api/v1/analysis/${analysisId}/evaluation-trace`);
+    },
+
+    /** Fetch demo evaluation trace. */
+    async traceDemo(ageGroup: string, childName: string) {
+      const params = new URLSearchParams({ age_group: ageGroup, child_name: childName });
+      return request<any>(`/api/v1/analysis/evaluation-trace?${params}`);
+    },
   },
 
   // ── Analysis (Demo) ──────────────────────────────────────────────
@@ -600,9 +800,17 @@ export const api = {
     async childTrajectory(childId: number) {
       return request<{
         child_name: string;
+        age_group: string;
+        class_name: string | null;
+        dimensions: Record<string, Array<{ date: string | null; score: number; level: string; pck_stage: string | null }>>;
         chart_data: Array<Record<string, number | string>>;
-        latest_scores: Record<string, { score: number; level: string }>;
+        latest_scores: Record<string, { date: string | null; score: number; level: string; pck_stage: string | null }>;
         trends: Record<string, string>;
+        error_evolution: Array<{
+          error: string; first_seen: string; last_seen: string;
+          count: number; dates: string[]; status: "resolved" | "recurring" | "new";
+        }>;
+        assessment_count: number;
       }>(`/api/v1/dashboard/child/${childId}/trajectory`);
     },
 

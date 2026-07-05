@@ -1,10 +1,11 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { toast } from "sonner";
+import { api, type ChildRecord } from "@/lib/api-client";
 
 type AgeGroup = "small" | "middle" | "large";
 type Dimension = "counting" | "addition_sub" | "shapes_space" | "patterns";
@@ -22,15 +23,48 @@ const DIMENSION_CONFIG: { key: Dimension; name: string; emoji: string; descripti
   { key: "patterns", name: "规律练习", emoji: "🔍", description: "分类、模式识别、排序" },
 ];
 
+interface DifficultyRecommendation {
+  level: number;
+  reason: string;
+  has_memory: boolean;
+  last_accuracy: number | null;
+  weak_dimensions: Array<{ dimension: Dimension; display_name: string; score: number }>;
+}
+
 export function WorksheetGenerator() {
   const [childName, setChildName] = useState("");
   const [ageGroup, setAgeGroup] = useState<AgeGroup>("middle");
   const [difficulty, setDifficulty] = useState(2);
   const [selectedDims, setSelectedDims] = useState<Set<Dimension>>(new Set(["counting", "shapes_space"]));
-  const [problemCount, setProblemCount] = useState(1);
+  const [problemCount, setProblemCount] = useState(8);
   const [includeAnswerKey, setIncludeAnswerKey] = useState(true);
   const [generatedHtml, setGeneratedHtml] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [childrenList, setChildrenList] = useState<ChildRecord[]>([]);
+  const [selectedChildId, setSelectedChildId] = useState<number | null>(null);
+  const [recommendation, setRecommendation] = useState<DifficultyRecommendation | null>(null);
+
+  useEffect(() => {
+    api.children.list().then((d) => setChildrenList(d.children)).catch(() => {});
+  }, []);
+
+  const handleChildSelect = useCallback(async (child: ChildRecord) => {
+    setSelectedChildId(child.id);
+    setChildName(child.name);
+    setAgeGroup((child.age_group as AgeGroup) || "middle");
+    setRecommendation(null);
+    try {
+      const rec = await api.worksheets.recommendDifficulty(child.id);
+      setRecommendation(rec);
+      setDifficulty(rec.level);
+      if (rec.weak_dimensions.length > 0) {
+        const weakDims = new Set<Dimension>(rec.weak_dimensions.map((w) => w.dimension));
+        if (weakDims.size > 0) setSelectedDims(weakDims);
+      }
+    } catch {
+      /* first-time child or no history — keep defaults */
+    }
+  }, []);
 
   const toggleDim = (dim: Dimension) => {
     setSelectedDims((prev) => {
@@ -53,7 +87,7 @@ export function WorksheetGenerator() {
     setLoading(true);
     try {
       const { authFetch } = await import("@/lib/api-client");
-      const params = new URLSearchParams({
+      const params: Record<string, string> = {
         child_name: childName,
         age_group: ageGroup,
         difficulty: String(difficulty),
@@ -61,11 +95,19 @@ export function WorksheetGenerator() {
         problem_count: String(problemCount),
         include_answer: String(includeAnswerKey),
         format: "html",
-      });
+      };
+      if (selectedChildId != null) {
+        params.child_id = String(selectedChildId);
+        params.auto_difficulty = "true";
+      }
+      const urlParams = new URLSearchParams(params);
 
-      const res = await authFetch(`/api/v1/worksheets/generate?${params}`);
+      const res = await authFetch(`/api/v1/worksheets/generate?${urlParams}`);
 
-      if (!res.ok) throw new Error("生成失败");
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body.detail || `生成失败 (${res.status})`);
+      }
 
       const html = await res.text();
       setGeneratedHtml(html);
@@ -75,7 +117,7 @@ export function WorksheetGenerator() {
     } finally {
       setLoading(false);
     }
-  }, [childName, ageGroup, difficulty, selectedDims, problemCount, includeAnswerKey]);
+  }, [childName, ageGroup, difficulty, selectedDims, problemCount, includeAnswerKey, selectedChildId]);
 
   const print = () => {
     if (!generatedHtml) return;
@@ -89,7 +131,7 @@ export function WorksheetGenerator() {
   };
 
   return (
-    <div className="flex-1 p-6 max-w-5xl mx-auto space-y-6">
+    <div className="flex-1 p-6 max-w-7xl mx-auto space-y-6">
       <div>
         <h1 className="text-2xl font-bold text-slate-800">📝 生成操作单</h1>
         <p className="text-sm text-slate-500 mt-1">
@@ -100,6 +142,58 @@ export function WorksheetGenerator() {
       {/* Config Panel */}
       <Card className="p-6 space-y-4">
         <h3 className="font-semibold text-slate-700">⚙️ 操作单设置</h3>
+
+        {/* Child selector — picks a profiled child to drive auto-difficulty (B5) */}
+        {childrenList.length > 0 && (
+          <div>
+            <label className="text-sm font-medium text-slate-600 block mb-1">
+              选择幼儿（可选，用于自适应难度）
+            </label>
+            <select
+              value={selectedChildId ?? ""}
+              onChange={(e) => {
+                const id = parseInt(e.target.value);
+                const child = childrenList.find((c) => c.id === id);
+                if (child) handleChildSelect(child);
+                else { setSelectedChildId(null); setRecommendation(null); }
+              }}
+              className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+            >
+              <option value="">— 不选，手动输入姓名 —</option>
+              {childrenList.map((child) => (
+                <option key={child.id} value={child.id}>
+                  {child.name} — {AGE_LABELS[child.age_group as AgeGroup]?.replace(/（.*）/, "") || child.age_group}
+                  {child.class_name ? ` (${child.class_name})` : ""}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
+
+        {/* B5: auto-pick difficulty badge */}
+        {recommendation && (
+          <div className="p-3 rounded-xl bg-gradient-to-r from-violet-50 to-indigo-50 border border-violet-200">
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="text-sm font-semibold text-violet-700">
+                🎯 自适应定档 Lv.{recommendation.level}
+              </span>
+              {recommendation.has_memory && recommendation.last_accuracy != null && (
+                <Badge className="bg-violet-100 text-violet-700 text-[10px]">
+                  上次正确率 {Math.round(recommendation.last_accuracy * 100)}%
+                </Badge>
+              )}
+              {!recommendation.has_memory && (
+                <Badge className="bg-slate-100 text-slate-500 text-[10px]">首次评估</Badge>
+              )}
+            </div>
+            <p className="text-xs text-slate-600 mt-1">{recommendation.reason}</p>
+            {recommendation.weak_dimensions.length > 0 && (
+              <p className="text-xs text-rose-600 mt-1">
+                📌 针对上次薄弱：{recommendation.weak_dimensions.map((w) => `${w.display_name}(${Math.round(w.score)}%)`).join("、")}
+              </p>
+            )}
+          </div>
+        )}
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {/* Child name */}
@@ -173,11 +267,11 @@ export function WorksheetGenerator() {
           {/* Problem count */}
           <div>
             <label className="text-sm font-medium text-slate-600 block mb-1">
-              题目数量：{problemCount} 题（建议每次1题，卡通大卡片适合幼儿）
+              题目数量：{problemCount} 题
             </label>
             <input
               type="range"
-              min="1"
+              min="4"
               max="20"
               step="2"
               value={problemCount}
@@ -234,7 +328,7 @@ export function WorksheetGenerator() {
           <iframe
             srcDoc={generatedHtml}
             className="w-full border-0"
-            style={{ height: "600px" }}
+            style={{ height: "900px" }}
             title="操作单预览"
           />
         </Card>

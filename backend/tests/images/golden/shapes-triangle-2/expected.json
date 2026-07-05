@@ -1,0 +1,27 @@
+{
+  "age_group": "middle",
+  "child_name": "测试幼儿",
+  "expected": {
+    "worksheet_type": "mixed",
+    "problem_count": {
+      "min": 0,
+      "max": 3
+    },
+    "dimensions_covered": [
+      "shapes_space"
+    ],
+    "at_least_one_correct": false,
+    "problems": [
+      {
+        "id": "P1",
+        "type": "shape_id",
+        "child_answer_match": "1",
+        "correct_answer_match": "1"
+      }
+    ]
+  },
+  "tolerance": {
+    "min_dimensions_scored": 0,
+    "max_unrecognized_ratio": 1.0
+  }
+}

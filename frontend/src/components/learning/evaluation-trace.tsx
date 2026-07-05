@@ -34,6 +34,7 @@ interface SubTrace {
   score: number;
   correct: number;
   total: number;
+  assessed?: boolean;
   problems: ProblemDetail[];
 }
 
@@ -166,10 +167,12 @@ export function EvaluationTrace({ data, loading }: EvaluationTraceProps) {
           {/* Expanded sub-traces */}
           {expandedDim === dim.dimension && (
             <div className="border-t bg-slate-50/50 p-3 space-y-2">
-              {dim.sub_traces.map((st) => (
+              {dim.sub_traces.map((st) => {
+                const notAssessed = st.assessed === false || st.total === 0;
+                return (
                 <div
                   key={st.sub_dimension}
-                  className="bg-white rounded-lg border shadow-sm"
+                  className={`bg-white rounded-lg border shadow-sm ${notAssessed ? "border-dashed border-slate-200" : ""}`}
                 >
                   {/* Sub-dim header */}
                   <button
@@ -185,16 +188,23 @@ export function EvaluationTrace({ data, loading }: EvaluationTraceProps) {
                     <div className="flex items-center gap-2 text-left">
                       <span
                         className={`w-2 h-2 rounded-full ${
+                          notAssessed ? "bg-slate-300" :
                           st.score >= 71 ? "bg-green-500" :
                           st.score >= 41 ? "bg-amber-500" : "bg-red-400"
                         }`}
                       />
-                      <span className="text-sm font-medium text-slate-700">
+                      <span className={`text-sm font-medium ${notAssessed ? "text-slate-500" : "text-slate-700"}`}>
                         {st.sub_dimension_name}
                       </span>
-                      <span className="text-xs text-slate-400">
-                        {st.correct}/{st.total} · {st.score}%
-                      </span>
+                      {notAssessed ? (
+                        <span className="text-[10px] font-medium text-slate-400 bg-slate-100 px-1.5 py-0.5 rounded">
+                          本张未考查
+                        </span>
+                      ) : (
+                        <span className="text-xs text-slate-400">
+                          {st.correct}/{st.total} · {st.score}%
+                        </span>
+                      )}
                     </div>
                     <span className="text-xs text-slate-400">
                       {st.indicator ? "📋" : ""} {expandedSub === `${dim.dimension}-${st.sub_dimension}` ? "▾" : "▸"}
@@ -215,6 +225,13 @@ export function EvaluationTrace({ data, loading }: EvaluationTraceProps) {
                             </p>
                           )}
                         </div>
+                      )}
+
+                      {/* Not-assessed note */}
+                      {notAssessed && (
+                        <p className="text-xs text-slate-400 italic">
+                          本张操作单未涉及该子维度，如需评估请上传对应题型的操作单。
+                        </p>
                       )}
 
                       {/* Per-problem details */}
@@ -274,7 +291,8 @@ export function EvaluationTrace({ data, loading }: EvaluationTraceProps) {
                     </div>
                   )}
                 </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </div>

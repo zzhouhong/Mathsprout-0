@@ -1,4 +1,4 @@
-"""Test the recognition + assessment pipeline on a real worksheet image."""
+"""Batch test the recognition pipeline on multiple worksheet images."""
 import asyncio, sys, json, io
 sys.path.insert(0, '.')
 sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
@@ -7,49 +7,58 @@ from app.services.worksheet_recognizer import WorksheetRecognizer
 from app.services.assessment_engine import assess
 from app.services.image_processor import ImageProcessor
 
-async def main():
-    img_path = r"c:\xwechat_files\wxid_berzlxdxjjb922_5005\temp\RWTemp\2026-06\9e20f478899dc29eb19741386f9343c8\7364c561e3db61bd6297cf30ba0bbd9d.jpg"
+IMAGES = [
+    r"c:\xwechat_files\wxid_berzlxdxjjb922_5005\temp\RWTemp\2026-06\9e20f478899dc29eb19741386f9343c8\d6e9be1d97cc0db6462c1de2d69f5bbb.jpg",
+    r"c:\xwechat_files\wxid_berzlxdxjjb922_5005\temp\RWTemp\2026-06\9e20f478899dc29eb19741386f9343c8\4814ab44157c80dfe1f7cac5ed93e09b.jpg",
+]
+
+async def analyze_one(img_path: str, index: int):
+    print(f"\n{'='*60}")
+    print(f"IMAGE {index}: {img_path.split(chr(92))[-1][:40]}...")
+    print(f"{'='*60}")
+
     with open(img_path, 'rb') as f:
         img_data = f.read()
-    print(f"Image size: {len(img_data)} bytes")
+    print(f"Size: {len(img_data)} bytes")
 
     proc = ImageProcessor()
-    processed, fname = await proc.process(img_data, 'test2.jpg')
-    print(f"Processed: {fname} ({len(processed)} bytes)")
+    processed, fname = await proc.process(img_data, f'test{index}.jpg')
 
     rec = WorksheetRecognizer()
-    print(f"Calling Vision API (model={rec.model})...")
     result = await rec.analyze(processed, age_group='small')
 
     meta = result.pop('_meta', {})
-    print(f"\n=== RECOGNITION ===")
-    print(f"Model: {meta.get('model', '?')}")
-    print(f"Tokens: {json.dumps(meta.get('usage', {}))}")
-    print(f"Worksheet type: {result.get('worksheet_type')}")
-    print(f"Problems ({len(result.get('problems', []))}):")
-    for p in result.get('problems', []):
+    ws_type = result.get('worksheet_type', '?')
+    learning_obj = result.get('observations', {}).get('learning_objective', '未提取')
+    print(f"Type: {ws_type} | Tokens: {meta.get('usage', {}).get('total_tokens', '?')}")
+    print(f"Learning objective: {learning_obj}")
+
+    problems = result.get('problems', [])
+    print(f"Problems ({len(problems)}):")
+    for p in problems:
         status = "OK" if p['is_correct'] else "X"
         print(f"  {p['id']}: type={p['type']} | child={p['child_answer']} | expected={p['correct_answer']} | {status}")
-    print(f"Preliminary scores: {json.dumps(result.get('dimension_scores_preliminary', {}), ensure_ascii=False)}")
-    print(f"Observations: {json.dumps(result.get('observations', {}), ensure_ascii=False)[:500]}")
+
+    if ws_type == 'incomplete' or not problems:
+        print("→ EMPTY/INCOMPLETE — skipping assessment")
+        return
 
     assessment = await assess(result, 'small', '测试幼儿')
-    print(f"\n=== ASSESSMENT ===")
+    print(f"\nScores:")
     for dim in assessment['assessment']:
-        print(f"  {dim['display_name']}: {dim['score']}% [{dim['level']}]")
+        if dim['score_details']['total'] > 0:
+            print(f"  {dim['display_name']}: {dim['score']}% [{dim['level']}] ({dim['score_details']['correct']}/{dim['score_details']['total']})")
 
     dp = assessment.get('dimension_problems', {})
     if dp:
-        print(f"\n=== PER-DIMENSION ===")
         for dim_key, dim_data in dp.items():
-            print(f"\n{dim_data['display_name']} ({dim_data['score']}%, {dim_data['correct_count']}/{dim_data['total_count']})")
-            print(f"  Analysis: {dim_data['dimension_analysis'][:300]}")
-            for p in dim_data['problems']:
-                print(f"    {p['id']}: {p['type_name']} | ans={p['child_answer']} | {'OK' if p['is_correct'] else 'X'}")
-    else:
-        print("\n  (no dimension_problems — possibly incomplete)")
+            print(f"  → {dim_data['dimension_analysis'][:200]}")
 
-    print(f"\n=== OVERALL ===")
-    print(assessment['overall_summary'][:500])
+async def main():
+    for i, path in enumerate(IMAGES, 1):
+        try:
+            await analyze_one(path, i)
+        except Exception as e:
+            print(f"ERROR: {e}")
 
 asyncio.run(main())

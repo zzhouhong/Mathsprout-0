@@ -16,6 +16,7 @@ from typing import Dict, List, Optional
 from datetime import datetime
 from app.core.prompts.pck_reference import (
     MILESTONES,
+    AGE_LEVEL_THRESHOLDS,
     AgeGroup,
     Dimension,
     DevLevel,
@@ -23,6 +24,7 @@ from app.core.prompts.pck_reference import (
     get_dimension_display_name,
     get_age_display_name,
 )
+from app.services.memory_service import build_memory_card, build_comparison_for_dimension
 
 
 async def generate_teacher_report(
@@ -30,9 +32,14 @@ async def generate_teacher_report(
     child_name: str,
     age_group: str,
     worksheet_observations: Optional[Dict] = None,
+    child_memory: Optional[Dict] = None,
 ) -> Dict:
     """
     Generate detailed teacher report focused on teaching reflection and improvement.
+
+    child_memory: optional prior-memory dict (from memory_service). When present,
+    the report surfaces a "🧠 我记得这个孩子" card (B6) and per-dimension
+    "↻ 对比上次" comparison lines (B8).
     """
     dimensions = assessment_result.get("assessment", [])
     overall = assessment_result.get("overall_summary", "")
@@ -58,7 +65,11 @@ async def generate_teacher_report(
         }],
         "age_expectation": {
             "label": f"{age_display}期望基准",
-            "data": [70, 70, 70, 70],  # L3 threshold as reference
+            # L3 (熟练期) threshold anchored to age group: small=60, middle=70, large=80.
+            # Younger kids have a lower bar — the baseline ring moves with age.
+            "data": [
+                AGE_LEVEL_THRESHOLDS.get(age_group, {}).get("L3", 70)
+            ] * len(dimensions),
             "borderColor": "rgba(148, 163, 184, 0.5)",
             "borderDash": [5, 5],
             "pointRadius": 0,
@@ -75,28 +86,54 @@ async def generate_teacher_report(
     teaching_suggestions = {}
     for d in dimensions:
         dim_name = get_dimension_display_name(d["dimension"])
+        comparison = build_comparison_for_dimension(child_memory, d["dimension"], d)
+        # B8: adjust next-stage goal wording if we know prior trajectory
+        next_goal = _get_next_stage_goal(d["dimension"], d["level"])
+        if comparison and child_memory and child_memory.get("has_memory"):
+            prior = child_memory.get("dimensions", {}).get(d["dimension"])
+            if prior:
+                delta = d.get("score", 0) - prior.get("latest_score", 0)
+                if delta > 5 or (set(prior.get("error_patterns", [])) - set(d.get("error_patterns", []))):
+                    next_goal = f"已进步，可向下一阶段进阶：{next_goal}"
+                elif set(prior.get("error_patterns", [])) & set(d.get("error_patterns", [])):
+                    next_goal = f"仍需巩固：{next_goal}"
         teaching_suggestions[dim_name] = {
             "current_stage": d.get("pck_stage", ""),
             "level": f"{d.get('level_emoji', '')} {d.get('level_name', '')}",
             "recommendations": d.get("recommendations", ""),
-            "next_stage_goal": _get_next_stage_goal(d["dimension"], d["level"]),
+            "next_stage_goal": next_goal,
             "classroom_activities": _get_classroom_activities(d["dimension"], d["level"]),
             "materials_suggestion": _get_materials_suggestion(d["dimension"]),
+            "comparison_to_last": comparison,
         }
+
+    # Core-experience targeting conclusion + support (drives the new top-of-report
+    # sections): declares which core experience(s) this worksheet points at and
+    # organizes teacher follow-up support around them.
+    core_experiences = assessment_result.get("core_experiences") or {}
+    core_experience_analysis = _build_core_experience_analysis(core_experiences)
+    core_experience_support = _build_core_experience_support(core_experiences)
 
     # Teaching reflection questions (aligned with 《评估指南》 B8)
     reflection_questions = _generate_reflection_questions(dimensions, age_group)
+
+    # B6: "🧠 我记得这个孩子" card (None on first assessment → frontend hides it)
+    child_memory_card = build_memory_card(child_memory, assessment_result)
 
     return {
         "child_name": child_name,
         "age_group": age_display,
         "generated_at": datetime.now().isoformat(),
         "dimensions": dimensions,
+        "dimension_problems": assessment_result.get("dimension_problems", {}),
         "radar_chart_data": radar_data,
         "pck_analysis": pck_analysis,
         "typical_errors_diagnosis": error_diagnosis,
         "teaching_suggestions": teaching_suggestions,
+        "core_experience_analysis": core_experience_analysis,
+        "core_experience_support": core_experience_support,
         "teaching_reflection_questions": reflection_questions,
+        "child_memory_card": child_memory_card,
         "overall_summary": overall,
         "report_type": "teacher",
     }
@@ -106,6 +143,7 @@ async def generate_parent_report(
     assessment_result: Dict,
     child_name: str,
     age_group: str,
+    child_memory: Optional[Dict] = None,
 ) -> Dict:
     """
     Generate warm, encouraging parent report.
@@ -115,6 +153,34 @@ async def generate_parent_report(
     """
     dimensions = assessment_result.get("assessment", [])
     age_display = get_age_display_name(age_group)
+
+    # B6: parent-friendly memory card (encouraging framing, no scores)
+    parent_memory_card = None
+    if child_memory and child_memory.get("has_memory"):
+        session_count = child_memory.get("session_count", child_memory.get("assessment_count", 0))
+        improving_names = [i["display_name"] for i in child_memory.get("improving", [])]
+        prior_weak = [w["display_name"] for w in child_memory.get("weak_dimensions", [])]
+        # dims that were weak before but improved now → "进步了"
+        current_dims = {d["dimension"]: d for d in dimensions}
+        progressed = []
+        for w in child_memory.get("weak_dimensions", []):
+            cur = current_dims.get(w["dimension"])
+            if cur and cur.get("score_details", {}).get("total", 0) > 0:
+                if cur.get("score", 0) > w.get("latest_score", 0) + 5:
+                    progressed.append(w["display_name"])
+        summary = f"这是宝宝第 {session_count} 次和萌芽数学见面啦！"
+        if progressed:
+            summary += f"上次还在努力的「{'、'.join(progressed)}」，这次有明显进步，为宝宝点赞！🌟"
+        elif improving_names:
+            summary += f"宝宝一直在进步的方面：{'、'.join(improving_names[:2])}。"
+        else:
+            summary += "宝宝正在稳步发展，继续保持陪伴就好。"
+        parent_memory_card = {
+            "remembered": True,
+            "session_count": session_count,
+            "summary": summary,
+            "progressed_areas": progressed,
+        }
 
     # Extract strengths (L3/L4) and growing areas (L1/L2)
     strengths = []
@@ -201,11 +267,74 @@ async def generate_parent_report(
         "family_activities": family_activities,
         "learning_quality_notes": learning_quality_notes,
         "parent_tips": parent_tips,
+        "parent_memory_card": parent_memory_card,
         "report_type": "parent",
     }
 
 
 # ─── Helper Functions ────────────────────────────────────────────────
+
+def _build_core_experience_analysis(core_experiences: Dict) -> Dict:
+    """
+    Build the "核心经验定位" conclusion block for the teacher report.
+
+    Passes through the assessment_engine core_experiences block (learning
+    objective + targeted sub-dimensions with level/indicator/why), and adds
+    a one-line summary the UI can render as the conclusion sentence.
+    """
+    targets = core_experiences.get("targets", []) if core_experiences else []
+    learning_objective = (core_experiences or {}).get("learning_objective", "")
+
+    if targets:
+        # Group target names by dimension for a readable summary
+        assessed = [t for t in targets if t.get("source") == "assessed"]
+        pointed = [t for t in targets if t.get("source") == "pointed"]
+        parts = []
+        for t in assessed:
+            parts.append(f"{t['dimension_name']}·{t['name']}")
+        summary = "本操作单指向核心经验：" + "、".join(parts) if parts else ""
+        if pointed:
+            pt_names = "、".join(f"{t['name']}" for t in pointed)
+            summary += f"（学习目标另指向：{pt_names}，本单未直接测查）"
+    else:
+        summary = "未能从操作单识别明确的核心经验指向，请教师结合学习目标人工判断。"
+
+    return {
+        "learning_objective": learning_objective,
+        "targets": targets,
+        "summary": summary,
+    }
+
+
+def _build_core_experience_support(core_experiences: Dict) -> Dict:
+    """
+    Build the "教师后续支持（按核心经验组织）" block.
+
+    For each targeted core experience (assessed + pointed), assemble:
+      - strategy: teaching_tips for this sub-dimension × age (from PCK)
+      - observation_points: evidence_examples (what to look for)
+      - materials: classroom materials for the parent dimension
+    """
+    targets = core_experiences.get("targets", []) if core_experiences else []
+    support = {}
+    for t in targets:
+        dim = t.get("dimension", "")
+        entry = {
+            "dimension_name": t.get("dimension_name", ""),
+            "source": t.get("source", ""),
+            "strategy": t.get("teaching_tips", "") or "参照该核心经验的年龄段教学建议开展活动。",
+            "observation_points": t.get("evidence_examples", []) or [],
+            "materials": _get_materials_suggestion(dim),
+        }
+        # Carry level info for assessed targets so the support card can show it
+        if t.get("source") == "assessed":
+            entry["level"] = t.get("level", "")
+            entry["level_name"] = t.get("level_name", "")
+            entry["level_emoji"] = t.get("level_emoji", "")
+            entry["score"] = t.get("score", 0.0)
+        support[t["sub_dimension"]] = entry
+    return support
+
 
 def _build_pck_analysis(dimensions: List[Dict], age_group: str) -> str:
     """Build PCK-stage analysis for each dimension."""

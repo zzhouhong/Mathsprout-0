@@ -30,6 +30,19 @@ cd backend
 python -m pytest tests/test_assessment_engine.py -v
 python -m pytest tests/test_assessment_engine.py::test_counting_dimension -v
 
+# 测试（场景回归 — 29 条 PCK 规则验证）
+cd backend
+python -m pytest tests/test_scenarios.py -v
+
+# 独立评估核心 CLI（零 AI 调用，JSON→评估+双报告）
+cd backend
+.\venv\Scripts\python.exe assess.py --demo --format markdown
+.\venv\Scripts\python.exe assess.py --input tests/scenarios/
+
+# 视觉识别独立评估（单图→3-pass 识别，支持 --provider claude/qwen）
+cd backend
+.\venv\Scripts\python.exe vision_eval.py --image tests/images/ws.jpg --provider claude --format markdown
+
 # Docker（仅用于 PostgreSQL — 拉取新镜像可能失败）
 docker run -d --name kindergarten-db \
   -e POSTGRES_DB=kindergarten_math \

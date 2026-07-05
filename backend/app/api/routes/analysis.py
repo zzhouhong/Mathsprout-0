@@ -144,6 +144,82 @@ def _build_demo(age: str, child_name: str, age_display: str) -> dict:
             results.append({"name": name, "score": round(s, 1), "max_score": 100.0})
         return results
 
+    def _demo_dimension_problems() -> dict:
+        """Fabricate per-dimension problem details so the demo experience
+        matches a real upload (expandable problem list + dimension analysis).
+        Correct/total counts are consistent with the age-specific expectations.
+        """
+        # Realistic problem templates per dimension
+        templates = {
+            "counting": {
+                "type": "counting",
+                "type_name": "点数",
+                "items": [("🍎🍎🍎🍎", "4"), ("🍌🍌🍌", "3"), ("⚽⚽⚽⚽⚽", "5"), ("🍓🍓", "2"), ("🍇🍇🍇🍇", "4"), ("🥕🥕🥕🥕🥕🥕", "6")],
+            },
+            "addition_sub": {
+                "type": "add_10",
+                "type_name": "加法",
+                "items": [("2 + 1", "3"), ("1 + 3", "4"), ("2 + 2", "4"), ("3 + 2", "5"), ("1 + 4", "5")],
+            },
+            "shapes_space": {
+                "type": "shape_id",
+                "type_name": "图形识别",
+                "items": [("⚪圆形", "圆形"), ("🟦正方形", "正方形"), ("🔺三角形", "三角形"), ("⭐星形", "星形"), ("🟩长方形", "长方形"), ("⬟六边形", "六边形"), ("🔷菱形", "菱形")],
+            },
+            "patterns": {
+                "type": "pattern_next",
+                "type_name": "找规律",
+                "items": [("🔴🔵🔴🔵🔴 ?", "🔵"), ("🔺⭐🔺⭐🔺 ?", "⭐"), ("🍎🍎🍐🍎🍎🍐🍎 ?", "🍎"), ("1 2 1 2 1 ?", "2"), ("⬆️⬇️⬆️⬇️⬆️ ?", "⬇️"), ("🌕🌑🌕🌑 ?", "🌕")],
+            },
+        }
+        dim_order = ["counting", "addition", "shapes", "patterns"]
+        dim_key_map = {"counting": "counting", "addition": "addition_sub", "shapes": "shapes_space", "patterns": "patterns"}
+        dim_name_map = {"counting": "数概念与运算", "addition_sub": "数运算能力", "shapes_space": "图形与空间", "patterns": "集合与模式"}
+        dim_analysis_map = {
+            "counting": "点数准确性是数概念基础；该幼儿在实物点数方面表现稳定，建议通过'按数取物'游戏巩固基数意义理解。",
+            "addition_sub": "实物操作阶段是加减运算的关键过渡；建议继续借助实物/手指等半具象材料，逐步过渡到符号运算。",
+            "shapes_space": "图形识别能力发展良好；可增加图形拼搭与空间方位描述活动，促进空间想象力发展。",
+            "patterns": "模式识别处于AB水平；建议通过分类、排序活动强化属性辨识，引导幼儿用语言描述规律。",
+        }
+
+        result = {}
+        for dim_short in dim_order:
+            exp_data = exp[dim_short]
+            dim_key = dim_key_map[dim_short]
+            tmpl = templates[dim_key]
+            total = exp_data["total"]
+            correct = exp_data["correct"]
+            items = tmpl["items"][:total] if len(tmpl["items"]) >= total else tmpl["items"]
+            # Pad if not enough items
+            while len(items) < total:
+                items.append(tmpl["items"][len(items) % len(tmpl["items"])])
+            problems = []
+            for i, (prompt, answer) in enumerate(items):
+                is_correct = i < correct
+                # Wrong answers: a plausible distractor
+                wrong = str(int(answer) + 1) if answer.isdigit() else (answer + "？")
+                problems.append({
+                    "id": f"{dim_short[0].upper()}{i+1}",
+                    "type": tmpl["type"],
+                    "type_name": tmpl["type_name"],
+                    "child_answer": answer if is_correct else wrong,
+                    "correct_answer": answer,
+                    "is_correct": is_correct,
+                    "handwriting_quality": "clear",
+                    "strategy": "counting_objects" if dim_key == "addition_sub" else "",
+                })
+            result[dim_key] = {
+                "display_name": dim_name_map[dim_key],
+                "score": float(exp_data["score"]),
+                "level": exp_data["level"],
+                "level_name": _level_info(exp_data["level"])["name"],
+                "correct_count": correct,
+                "total_count": total,
+                "problems": problems,
+                "dimension_analysis": dim_analysis_map[dim_key],
+            }
+        return result
+
     return {
         "child_name": child_name,
         "age_group": age,

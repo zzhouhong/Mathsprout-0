@@ -230,3 +230,34 @@ class ProgressEvent(BaseModel):
     message: str
     progress_pct: float = 0.0
     data: Optional[dict] = None
+
+
+# ─── Teacher Confirmation Schemas ─────────────────────────────────────
+
+class ProblemCorrection(BaseModel):
+    """Single problem correction from teacher review."""
+    id: str
+    type: ProblemTypeEnum
+    child_answer: str  # teacher-confirmed or corrected answer
+    correct_answer: str
+    is_correct: bool
+    confidence: float = Field(default=1.0, ge=0.0, le=1.0)
+    handwriting_quality: HandwritingQualityEnum = HandwritingQualityEnum.CLEAR
+    has_erasure: bool = False
+    erasure_pattern: ErasurePatternEnum = ErasurePatternEnum.NONE
+    strategy_indicators: Optional[str] = None
+
+
+class ConfirmAnswersRequest(BaseModel):
+    """Request to confirm/correct AI-recognized answers and re-run assessment."""
+    child_name: str = Field(default="幼儿", min_length=1, max_length=50)
+    age_group: AgeGroupEnum
+    problems: List[ProblemCorrection] = Field(..., min_length=1)
+    observations: Optional[dict] = None
+    child_id: Optional[int] = None
+
+
+class ConfirmAnswersResponse(BaseModel):
+    """Response after re-running assessment with confirmed answers."""
+    assessment: dict
+    reports: dict  # { "teacher": TeacherReportData, "parent": ParentReportData }

@@ -20,9 +20,17 @@ interface PckRadarChartProps {
   dimensions: Dimension[];
   scores?: Record<string, number>; // dimension key → score 0-100
   size?: number;
+  baseline?: number; // age expectation threshold 0-100 (e.g. L3 cutoff)
+  baselineLabel?: string; // label for the baseline ring (e.g. "中班期望")
 }
 
-export function PckRadarChart({ dimensions, scores, size = 320 }: PckRadarChartProps) {
+export function PckRadarChart({
+  dimensions,
+  scores,
+  size = 320,
+  baseline,
+  baselineLabel,
+}: PckRadarChartProps) {
   const cx = size / 2;
   const cy = size / 2;
   const radius = size * 0.38;
@@ -113,6 +121,42 @@ export function PckRadarChart({ dimensions, scores, size = 320 }: PckRadarChartP
             />
           );
         })}
+
+        {/* Age expectation baseline (dashed) */}
+        {baseline !== undefined && baseline > 0 && (
+          <>
+            {(() => {
+              const ringPoints = Array.from({ length: n }, (_, i) =>
+                getPoint(i, baseline)
+              );
+              const ringPath =
+                ringPoints
+                  .map((p, i) => `${i === 0 ? "M" : "L"} ${p.x.toFixed(1)} ${p.y.toFixed(1)}`)
+                  .join(" ") + " Z";
+              return (
+                <path
+                  d={ringPath}
+                  fill="none"
+                  stroke="#94a3b8"
+                  strokeWidth={1.2}
+                  strokeDasharray="5 4"
+                />
+              );
+            })()}
+            {baselineLabel && (
+              <text
+                x={cx}
+                y={cy - ((baseline / 100) * radius) - 6}
+                textAnchor="middle"
+                dominantBaseline="auto"
+                className="fill-slate-400"
+                fontSize="9"
+              >
+                {baselineLabel}
+              </text>
+            )}
+          </>
+        )}
 
         {/* Score fill */}
         <path

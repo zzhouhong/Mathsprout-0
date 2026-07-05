@@ -1,0 +1,16 @@
+{
+  "description": "加减混淆场景 — 减法的答案比被减数大，验证运算混淆错误检测",
+  "child": "小混乱",
+  "age": "large",
+  "vision": {
+    "worksheet_type": "mixed",
+    "problems": [
+      {"id": "P1", "type": "add_10", "child_answer": "9", "correct_answer": "9", "is_correct": true, "confidence": 0.9, "handwriting_quality": "clear", "has_erasure": false, "erasure_pattern": "none", "strategy_indicators": "mental"},
+      {"id": "P2", "type": "sub_10", "child_answer": "8", "correct_answer": "3", "is_correct": false, "confidence": 0.8, "handwriting_quality": "clear", "has_erasure": false, "erasure_pattern": "none", "strategy_indicators": "counting_objects"},
+      {"id": "P3", "type": "sub_10", "child_answer": "9", "correct_answer": "2", "is_correct": false, "confidence": 0.75, "handwriting_quality": "clear", "has_erasure": false, "erasure_pattern": "none", "strategy_indicators": "counting_objects"},
+      {"id": "P4", "type": "add_10", "child_answer": "13", "correct_answer": "6", "is_correct": false, "confidence": 0.7, "handwriting_quality": "clear", "has_erasure": false, "erasure_pattern": "none", "strategy_indicators": "counting_objects"},
+      {"id": "P5", "type": "sub_10", "child_answer": "10", "correct_answer": "1", "is_correct": false, "confidence": 0.65, "handwriting_quality": "clear", "has_erasure": false, "erasure_pattern": "persistent_error", "strategy_indicators": "counting_objects"}
+    ],
+    "observations": {"overall_pck_notes": "幼儿在减法题目中频繁将答案算得比被减数大，呈现加减混淆模式"}
+  }
+}

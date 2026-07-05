@@ -1,0 +1,19 @@
+{
+  "description": "全对场景 — 大班幼儿全部答对，应达到 L4 进阶水平",
+  "child": "小达人",
+  "age": "large",
+  "vision": {
+    "worksheet_type": "mixed",
+    "problems": [
+      {"id": "P1", "type": "counting", "child_answer": "10", "correct_answer": "10", "is_correct": true, "confidence": 0.95, "handwriting_quality": "clear", "has_erasure": false, "erasure_pattern": "none", "strategy_indicators": "mental"},
+      {"id": "P2", "type": "counting", "child_answer": "15", "correct_answer": "15", "is_correct": true, "confidence": 0.9, "handwriting_quality": "clear", "has_erasure": false, "erasure_pattern": "none", "strategy_indicators": "mental"},
+      {"id": "P3", "type": "add_10", "child_answer": "9", "correct_answer": "9", "is_correct": true, "confidence": 0.92, "handwriting_quality": "clear", "has_erasure": false, "erasure_pattern": "none", "strategy_indicators": "mental"},
+      {"id": "P4", "type": "sub_10", "child_answer": "3", "correct_answer": "3", "is_correct": true, "confidence": 0.88, "handwriting_quality": "clear", "has_erasure": false, "erasure_pattern": "none", "strategy_indicators": "mental"},
+      {"id": "P5", "type": "add_10", "child_answer": "7", "correct_answer": "7", "is_correct": true, "confidence": 0.93, "handwriting_quality": "clear", "has_erasure": false, "erasure_pattern": "none", "strategy_indicators": "mental"},
+      {"id": "P6", "type": "shape_id", "child_answer": "三角形", "correct_answer": "三角形", "is_correct": true, "confidence": 0.95, "handwriting_quality": "clear", "has_erasure": false, "erasure_pattern": "none", "strategy_indicators": ""},
+      {"id": "P7", "type": "spatial", "child_answer": "右边", "correct_answer": "右边", "is_correct": true, "confidence": 0.9, "handwriting_quality": "clear", "has_erasure": false, "erasure_pattern": "none", "strategy_indicators": ""},
+      {"id": "P8", "type": "pattern_next", "child_answer": "○", "correct_answer": "○", "is_correct": true, "confidence": 0.85, "handwriting_quality": "clear", "has_erasure": false, "erasure_pattern": "none", "strategy_indicators": ""}
+    ],
+    "observations": {"overall_pck_notes": "幼儿在各维度均表现出熟练水平，运算思维已进入符号阶段"}
+  }
+}

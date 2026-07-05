@@ -14,7 +14,7 @@ export default function DashboardLayout({
     >
       <DashboardTabs />
       <main
-        className="flex-1 flex flex-col min-w-0"
+        className="flex-1 flex flex-col min-w-0 pb-16 md:pb-0"
         style={{
           backgroundImage:
             "radial-gradient(circle at 20% 80%, var(--kid-bg-bubblegum) 0%, transparent 50%), radial-gradient(circle at 80% 20%, var(--kid-bg-sky) 0%, transparent 50%)",

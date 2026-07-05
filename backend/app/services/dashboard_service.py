@@ -86,6 +86,10 @@ async def get_child_trajectory(
         else:
             trends[dim] = "insufficient_data"
 
+    # B7: error-pattern evolution timeline (resolved / recurring / new)
+    from app.services.memory_service import aggregate_error_history
+    error_evolution = aggregate_error_history(list(assessments))
+
     return {
         "child_id": child_id,
         "child_name": child.name,
@@ -95,6 +99,7 @@ async def get_child_trajectory(
         "chart_data": chart_data,
         "latest_scores": latest,
         "trends": trends,
+        "error_evolution": error_evolution,
         "assessment_count": len(assessments),
     }
 

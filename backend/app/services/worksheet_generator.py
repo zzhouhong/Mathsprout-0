@@ -20,6 +20,11 @@ from .interactive_content.progressions import (
     QUESTIONS_PER_SESSION,
     get_age_anchor_level,
 )
+from app.core.prompts.pck_reference import (
+    SUB_DIMENSION_TO_DIMENSION,
+    get_sub_dimension_display_name,
+    get_dimension_display_name,
+)
 
 
 @dataclass
@@ -63,16 +68,20 @@ class GeneratedWorksheet:
     config: WorksheetConfig
     total_possible: int
     learning_objective: str = ""
+    memory_note: str = ""           # B6: "📌 针对上次薄弱的…" line when child_memory present
 
 
 # ─── Worksheet Generator ──────────────────────────────────────────────
 
-def generate_worksheet(config: Optional[WorksheetConfig] = None) -> GeneratedWorksheet:
+def generate_worksheet(config: Optional[WorksheetConfig] = None, child_memory: Optional[Dict[str, Any]] = None) -> GeneratedWorksheet:
     """
     Generate a complete printable worksheet.
 
     Args:
         config: Worksheet generation settings (uses defaults if None)
+        child_memory: Optional child memory dict (from memory_service) — when
+            present, the worksheet surfaces a "📌 针对上次薄弱" note so the
+            generated sheet visibly targets the child's weak dimensions.
 
     Returns:
         GeneratedWorksheet with problems, metadata, and answer key
@@ -102,6 +111,9 @@ def generate_worksheet(config: Optional[WorksheetConfig] = None) -> GeneratedWor
         config.dimensions, config.age_group, config.difficulty_level
     )
 
+    # B6: build the "针对上次薄弱" note from child memory
+    memory_note = _build_memory_note(child_memory, config.dimensions)
+
     return GeneratedWorksheet(
         title=title,
         child_name=config.child_name,
@@ -114,7 +126,28 @@ def generate_worksheet(config: Optional[WorksheetConfig] = None) -> GeneratedWor
         config=config,
         total_possible=len(problems),
         learning_objective=learning_obj,
+        memory_note=memory_note,
     )
+
+
+def _build_memory_note(child_memory: Optional[Dict[str, Any]], selected_dims: List[str]) -> str:
+    """Build the '📌 针对上次薄弱' line shown on the assessment-target card."""
+    if not child_memory or not child_memory.get("has_memory"):
+        return ""
+    weak = child_memory.get("weak_dimensions") or []
+    if not weak:
+        return ""
+    # Only mention weak dims actually targeted by this worksheet
+    targeted = [w for w in weak if w.get("dimension") in selected_dims]
+    if not targeted:
+        targeted = weak[:1]
+    parts = []
+    for w in targeted[:2]:
+        name = get_dimension_display_name(w.get("dimension", ""))
+        score = w.get("latest_score")
+        score_str = f"（上次 {score:.0f}%）" if score is not None else ""
+        parts.append(f"「{name}」{score_str}")
+    return "📌 本单针对上次薄弱：" + "、".join(parts)
 
 
 def _generate_worksheet_problems(
@@ -269,6 +302,12 @@ def worksheet_to_markdown(worksheet: GeneratedWorksheet) -> str:
         f"",
         f"**姓名：** {worksheet.child_name}　　　**日期：** {worksheet.date}",
         f"**难度等级：** {'⭐' * worksheet.difficulty_level}",
+        f"",
+        f"---",
+        f"",
+        f"### 🎯 考察目标",
+        f"{worksheet.learning_objective}",
+        f"{worksheet.memory_note}" if worksheet.memory_note else f"",
         f"",
         f"---",
         f"",
@@ -502,6 +541,81 @@ def _problem_cartoon_svg(problem, age_group: str) -> str:
     return ""
 
 
+# ─── Core-experience tagging & mascot (for prominent 考察目标 card) ─────
+
+# Map the generator's problem-type names to PCK sub-dimensions (核心经验).
+# These keys are the actual "type" strings emitted by the interactive_content
+# templates (count_objects/shape_recognition/pattern_what_next/...), which
+# differ from the recognizer's PROBLEM_TYPE_TO_SUB_DIMENSION keys.
+_GENERATOR_TYPE_TO_SUB_DIM: Dict[str, str] = {
+    # counting
+    "count_objects": "counting_accuracy",
+    "compare_quantity": "quantity_comparison",
+    "ordinal_position": "counting_accuracy",   # 序数：13子维度无专属，归入点数能力
+    "number_composition": "number_composition",
+    "skip_counting": "counting_accuracy",
+    # addition_sub
+    "object_add": "concrete_operation",
+    "object_sub": "concrete_operation",
+    "symbol_add": "symbolic_operation",
+    "symbol_sub": "symbolic_operation",
+    "word_problem": "symbolic_operation",
+    # shapes_space
+    "shape_recognition": "shape_recognition",
+    "spatial_position": "spatial_awareness",
+    "shape_composition": "shape_composition",
+    "solid_shape": "solid_recognition",
+    # symmetry: 13 子维度无对应项，略去不标
+    # patterns
+    "classify": "classification",
+    "pattern_what_next": "pattern_recognition",
+    "pattern_extend": "pattern_extension",
+    "pattern_create": "pattern_extension",
+    "sort_by_attribute": "sorting",
+}
+
+
+def _core_experience_tags(problems: List[WorksheetProblem]) -> List[Dict[str, str]]:
+    """Return unique core-experience tags for the problems on this worksheet.
+
+    Each tag: {dimension, dimension_name, sub_dimension, name} — e.g.
+    {dimension: 'shapes_space', dimension_name: '图形与空间',
+     sub_dimension: 'shape_recognition', name: '图形识别'}.
+    Ordered by first appearance.
+    """
+    tags: List[Dict[str, str]] = []
+    seen = set()
+    for p in problems:
+        sd = _GENERATOR_TYPE_TO_SUB_DIM.get(p.type)
+        if not sd or sd in seen:
+            continue
+        seen.add(sd)
+        dim = SUB_DIMENSION_TO_DIMENSION.get(sd, p.dimension)
+        tags.append({
+            "dimension": dim,
+            "dimension_name": get_dimension_display_name(dim) if dim else "",
+            "sub_dimension": sd,
+            "name": get_sub_dimension_display_name(sd),
+        })
+    return tags
+
+
+def _mascot_svg(size: int = 64) -> str:
+    """Cute sprout mascot (萌芽) — a smiling seedling with two leaves."""
+    return f'''<svg width="{size}" height="{size}" viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg">
+      <circle cx="32" cy="42" r="19" fill="#FFD93D" stroke="#3a3a3a" stroke-width="2"/>
+      <circle cx="32" cy="42" r="13" fill="#FFE54C" opacity="0.45"/>
+      <circle cx="26" cy="38" r="3.2" fill="#3a3a3a"/><circle cx="38" cy="38" r="3.2" fill="#3a3a3a"/>
+      <circle cx="27" cy="37" r="1" fill="white"/><circle cx="39" cy="37" r="1" fill="white"/>
+      <path d="M26,47 Q32,53 38,47" fill="none" stroke="#3a3a3a" stroke-width="2.5" stroke-linecap="round"/>
+      <circle cx="22" cy="45" r="2.5" fill="#FF85A2" opacity="0.6"/>
+      <circle cx="42" cy="45" r="2.5" fill="#FF85A2" opacity="0.6"/>
+      <path d="M32,24 Q22,16 14,22 Q20,28 32,24 Z" fill="#6BCB77" stroke="#3a3a3a" stroke-width="1.5"/>
+      <path d="M32,24 Q42,16 50,22 Q44,28 32,24 Z" fill="#6BCB77" stroke="#3a3a3a" stroke-width="1.5"/>
+      <line x1="32" y1="24" x2="32" y2="30" stroke="#6BCB77" stroke-width="2.2"/>
+    </svg>'''
+
+
 def worksheet_to_html(worksheet: GeneratedWorksheet) -> str:
     """Convert a generated worksheet to cartoon-style printable HTML.
 
@@ -539,6 +653,22 @@ def worksheet_to_html(worksheet: GeneratedWorksheet) -> str:
         bg_color = "#F8FAFC"
 
     problems_html = ""
+    # Core-experience badges for the prominent 考察目标 card
+    core_tags = _core_experience_tags(worksheet.problems)
+    if core_tags:
+        ce_badges_html = "".join(
+            f'<span class="ce-badge"><span class="ce-badge-dim">{t["dimension_name"]}</span>'
+            f'<span class="ce-badge-sep">·</span>'
+            f'<span class="ce-badge-sub">{t["name"]}</span></span>'
+            for t in core_tags
+        )
+        ce_summary = "本单考察核心经验：" + "、".join(
+            f'{t["dimension_name"]}·{t["name"]}' for t in core_tags
+        )
+    else:
+        ce_badges_html = ""
+        ce_summary = ""
+
     for p in worksheet.problems:
         data = p.data
         visual_html = ""
@@ -655,13 +785,49 @@ def worksheet_to_html(worksheet: GeneratedWorksheet) -> str:
     margin-bottom: 20px; border: 2px dashed #FFD93D;
     font-size: 16px; color: #64748b; text-align: center;
   }}
-  .learning-objective {{
-    background: linear-gradient(135deg, #E8F5E9 0%, #F1F8E9 100%);
-    border-radius: 16px; padding: 12px 20px; margin-bottom: 14px;
-    border-left: 5px solid #6BCB77;
-    font-size: 17px; color: #2E7D32; font-weight: 600;
+  .assessment-target {{
+    display: flex; align-items: center; gap: 16px;
+    background: linear-gradient(135deg, #FFF8E7 0%, #E8F5E9 100%);
+    border: 3px dashed #6BCB77; border-radius: {card_radius};
+    padding: 18px 22px; margin-bottom: 18px;
+    box-shadow: 0 4px 14px rgba(107,203,119,0.12);
   }}
-  .lo-label {{ color: #1B5E20; font-weight: 800; }}
+  .at-mascot {{ flex-shrink: 0; }}
+  .at-content {{ flex: 1; min-width: 0; }}
+  .at-title {{
+    font-size: 20px; font-weight: 900; color: #1B5E20;
+    margin-bottom: 8px;
+  }}
+  .at-badges {{ display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 10px; }}
+  .ce-badge {{
+    display: inline-flex; align-items: center; gap: 4px;
+    background: white; border: 2px solid #6BCB77;
+    border-radius: 999px; padding: 4px 14px;
+    font-size: 15px; box-shadow: 0 2px 6px rgba(0,0,0,0.05);
+  }}
+  .ce-badge-dim {{ color: #4D96FF; font-weight: 800; }}
+  .ce-badge-sep {{ color: #94a3b8; }}
+  .ce-badge-sub {{ color: #2E7D32; font-weight: 700; }}
+  .at-objective {{
+    font-size: 17px; color: #334155; font-weight: 600;
+    line-height: 1.6; margin-bottom: 6px;
+  }}
+  .at-memory {{
+    font-size: 14px; color: #C62828; font-weight: 700;
+    background: #FFEBEE; border: 2px solid #EF9A9A;
+    border-radius: 10px; padding: 6px 12px; margin: 8px 0;
+    display: inline-block;
+  }}
+  .at-summary {{ font-size: 13px; color: #64748b; }}
+  .reward-row {{
+    display: flex; align-items: center; justify-content: center; gap: 14px;
+    background: #FFF3CD; border: 2.5px dashed #FFD93D;
+    border-radius: 999px; padding: 14px 24px; margin: 24px auto 8px;
+    max-width: 560px; flex-wrap: wrap; text-align: center;
+  }}
+  .reward-label {{ font-size: 20px; font-weight: 900; color: #B8860B; }}
+  .reward-stars {{ font-size: 30px; color: #FFD93D; letter-spacing: 8px; }}
+  .reward-hint {{ font-size: 13px; color: #94a3b8; }}
   .small-hint {{
     background: #FF85A210; border-radius: 20px; padding: 10px 20px;
     margin-bottom: 16px; text-align: center; font-size: 18px; color: #FF85A2;
@@ -743,13 +909,25 @@ def worksheet_to_html(worksheet: GeneratedWorksheet) -> str:
       '🌱 小班' if is_small else '🌿 中班' if is_middle else '🌳 大班'
     }</span>
   </div>
-  <div class="learning-objective">
-    <span class="lo-label">🎯 学习目标：</span>{worksheet.learning_objective}
+  <div class="assessment-target">
+    <div class="at-mascot">{_mascot_svg(72)}</div>
+    <div class="at-content">
+      <div class="at-title">🎯 考察目标</div>
+      {ce_badges_html and f'<div class="at-badges">{ce_badges_html}</div>'}
+      <div class="at-objective">{worksheet.learning_objective}</div>
+      {worksheet.memory_note and f'<div class="at-memory">{worksheet.memory_note}</div>'}
+      {ce_summary and f'<div class="at-summary">{ce_summary}</div>'}
+    </div>
   </div>
   <div class="instructions">{worksheet.instructions.replace(chr(10), '<br>')}</div>
   {small_extra}
   {problems_html}
   {answer_html}
+  <div class="reward-row">
+    <span class="reward-label">🏅 完成奖励</span>
+    <span class="reward-stars">☆ ☆ ☆</span>
+    <span class="reward-hint">（做完请老师/家长涂色奖励星星）</span>
+  </div>
   <div class="mascot-footer">🌱 萌芽数学 Mathsprout · 陪伴每一次成长</div>
 </body>
 </html>"""

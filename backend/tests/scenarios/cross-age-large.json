@@ -1,0 +1,17 @@
+{
+  "description": "跨年龄对比（大班版）— 与 cross-age-small 完全相同的答题表现，但年龄为大班，验证相同分数不同年龄得不同等级",
+  "child": "小石头",
+  "age": "large",
+  "vision": {
+    "worksheet_type": "mixed",
+    "problems": [
+      {"id": "P1", "type": "counting", "child_answer": "3", "correct_answer": "5", "is_correct": false, "confidence": 0.8, "handwriting_quality": "clear", "has_erasure": false, "erasure_pattern": "none", "strategy_indicators": "counting_objects"},
+      {"id": "P2", "type": "counting", "child_answer": "2", "correct_answer": "2", "is_correct": true, "confidence": 0.9, "handwriting_quality": "clear", "has_erasure": false, "erasure_pattern": "none", "strategy_indicators": "counting_objects"},
+      {"id": "P3", "type": "add_10", "child_answer": "4", "correct_answer": "4", "is_correct": true, "confidence": 0.85, "handwriting_quality": "clear", "has_erasure": false, "erasure_pattern": "none", "strategy_indicators": "finger_counting"},
+      {"id": "P4", "type": "add_10", "child_answer": "6", "correct_answer": "3", "is_correct": false, "confidence": 0.7, "handwriting_quality": "clear", "has_erasure": false, "erasure_pattern": "none", "strategy_indicators": "finger_counting"},
+      {"id": "P5", "type": "compare", "child_answer": "左边多", "correct_answer": "左边多", "is_correct": true, "confidence": 0.9, "handwriting_quality": "clear", "has_erasure": false, "erasure_pattern": "none", "strategy_indicators": ""},
+      {"id": "P6", "type": "classify", "child_answer": "红色", "correct_answer": "蓝色", "is_correct": false, "confidence": 0.8, "handwriting_quality": "clear", "has_erasure": false, "erasure_pattern": "none", "strategy_indicators": ""}
+    ],
+    "observations": {"overall_pck_notes": "大班幼儿该表现明显低于年龄期望，需重点关注"}
+  }
+}

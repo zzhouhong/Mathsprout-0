@@ -77,25 +77,47 @@ class TestSubSkills:
 
 class TestDetermineLevel:
     def test_l4_advanced(self):
+        # Middle: L4 threshold ≥90
         assert determine_level(95, AgeGroup.MIDDLE, Dimension.COUNTING) == DevLevel.L4_ADVANCED
-        assert determine_level(91, AgeGroup.MIDDLE, Dimension.COUNTING) == DevLevel.L4_ADVANCED
+        assert determine_level(90, AgeGroup.MIDDLE, Dimension.COUNTING) == DevLevel.L4_ADVANCED
 
     def test_l3_proficient(self):
-        assert determine_level(71, AgeGroup.MIDDLE, Dimension.COUNTING) == DevLevel.L3_PROFICIENT
-        assert determine_level(90, AgeGroup.MIDDLE, Dimension.COUNTING) == DevLevel.L3_PROFICIENT
+        # Middle: L3 threshold ≥70
+        assert determine_level(70, AgeGroup.MIDDLE, Dimension.COUNTING) == DevLevel.L3_PROFICIENT
+        assert determine_level(85, AgeGroup.MIDDLE, Dimension.COUNTING) == DevLevel.L3_PROFICIENT
 
     def test_l2_growing(self):
-        assert determine_level(41, AgeGroup.MIDDLE, Dimension.COUNTING) == DevLevel.L2_GROWING
-        assert determine_level(70, AgeGroup.MIDDLE, Dimension.COUNTING) == DevLevel.L2_GROWING
+        # Middle: L2 threshold ≥40
+        assert determine_level(40, AgeGroup.MIDDLE, Dimension.COUNTING) == DevLevel.L2_GROWING
+        assert determine_level(65, AgeGroup.MIDDLE, Dimension.COUNTING) == DevLevel.L2_GROWING
 
     def test_l1_sprout(self):
+        # Middle: L1 threshold <40
         assert determine_level(0, AgeGroup.MIDDLE, Dimension.COUNTING) == DevLevel.L1_SPROUT
-        assert determine_level(40, AgeGroup.MIDDLE, Dimension.COUNTING) == DevLevel.L1_SPROUT
+        assert determine_level(39, AgeGroup.MIDDLE, Dimension.COUNTING) == DevLevel.L1_SPROUT
 
     def test_boundary_precision(self):
-        """Test exact boundary values."""
-        assert determine_level(70.5, AgeGroup.MIDDLE, Dimension.COUNTING) == DevLevel.L2_GROWING
-        assert determine_level(71.0, AgeGroup.MIDDLE, Dimension.COUNTING) == DevLevel.L3_PROFICIENT
+        """Test exact boundary values for Middle age group."""
+        assert determine_level(69.5, AgeGroup.MIDDLE, Dimension.COUNTING) == DevLevel.L2_GROWING
+        assert determine_level(70.0, AgeGroup.MIDDLE, Dimension.COUNTING) == DevLevel.L3_PROFICIENT
+
+    def test_age_anchored_differentiation(self):
+        """Same score yields different levels for different age groups."""
+        # Score 90: Small→L4 (lenient), Middle→L4, Large→L3 (strict)
+        assert determine_level(90, AgeGroup.SMALL, Dimension.COUNTING) == DevLevel.L4_ADVANCED
+        assert determine_level(90, AgeGroup.MIDDLE, Dimension.COUNTING) == DevLevel.L4_ADVANCED
+        assert determine_level(90, AgeGroup.LARGE, Dimension.COUNTING) == DevLevel.L3_PROFICIENT
+        # Score 50: Small→L2, Large→L2 (same level, different position within band)
+        assert determine_level(50, AgeGroup.SMALL, Dimension.COUNTING) == DevLevel.L2_GROWING
+        assert determine_level(50, AgeGroup.LARGE, Dimension.COUNTING) == DevLevel.L2_GROWING
+
+    def test_legacy_fallback(self):
+        """When age_group is None, use legacy uniform thresholds (91/71/41)."""
+        assert determine_level(95) == DevLevel.L4_ADVANCED
+        assert determine_level(91) == DevLevel.L4_ADVANCED
+        assert determine_level(71) == DevLevel.L3_PROFICIENT
+        assert determine_level(41) == DevLevel.L2_GROWING
+        assert determine_level(40) == DevLevel.L1_SPROUT
 
 
 class TestGetLevelDescription:

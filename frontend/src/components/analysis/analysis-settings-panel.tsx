@@ -23,7 +23,7 @@ interface AnalysisSettingsPanelProps {
   onAgeGroupChange: (age: AgeGroup) => void;
   onChildSelect: (child: ChildRecord) => void;
   onAnalyze: () => void;
-  onLoadDemo: () => void;
+  onRecognize?: () => void;
   actionLabel?: string;
 }
 
@@ -38,7 +38,7 @@ export function AnalysisSettingsPanel({
   onAgeGroupChange,
   onChildSelect,
   onAnalyze,
-  onLoadDemo,
+  onRecognize,
   actionLabel,
 }: AnalysisSettingsPanelProps) {
   const hasChildren = children_list.length > 0;
@@ -122,16 +122,18 @@ export function AnalysisSettingsPanel({
           disabled={!hasFile || loading}
           className="w-full py-2.5 rounded-xl bg-indigo-600 text-white font-medium hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
         >
-          {loading ? "分析中..." : actionLabel || "🚀 开始分析"}
+          {loading ? "分析中..." : actionLabel || "🚀 快速分析"}
         </button>
 
-        <button
-          onClick={onLoadDemo}
-          disabled={loading}
-          className="w-full py-2.5 rounded-xl bg-white text-slate-600 font-medium border border-slate-300 hover:bg-slate-50 disabled:opacity-50 transition-colors"
-        >
-          💡 查看演示数据
-        </button>
+        {onRecognize && (
+          <button
+            onClick={onRecognize}
+            disabled={!hasFile || loading}
+            className="w-full py-2.5 rounded-xl bg-white text-indigo-700 font-medium border-2 border-indigo-300 hover:bg-indigo-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+          >
+            🔍 识别 + 教师复核
+          </button>
+        )}
       </div>
     </Card>
   );

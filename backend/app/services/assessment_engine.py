@@ -31,6 +31,7 @@ from app.core.prompts.pck_reference import (
     get_age_display_name,
     PROBLEM_TYPE_TO_SUB_DIMENSION,
     SUB_DIMENSION_TO_DIMENSION,
+    classify_core_experiences,
 )
 
 
@@ -91,6 +92,15 @@ def _map_type_to_dimension(ptype: str) -> Optional[str]:
     if ptype in PROBLEM_TYPE_TO_DIMENSION:
         return PROBLEM_TYPE_TO_DIMENSION[ptype]
     return _guess_dimension_from_type(ptype)
+
+# ─── Dimension → ordered SubDimension list (inverse of SUB_DIMENSION_TO_DIMENSION) ──
+# Preserves SubDimension enum order so display is stable.
+DIMENSION_TO_SUB_DIMENSIONS: Dict[str, List[str]] = {}
+for _sd in SubDimension:
+    DIMENSION_TO_SUB_DIMENSIONS.setdefault(
+        SUB_DIMENSION_TO_DIMENSION[_sd], []
+    ).append(_sd)
+
 
 # ─── Problem type → Sub-skill mapping (for granular scores) ──────────
 
@@ -254,9 +264,13 @@ def _calculate_dimension_score(
     if not relevant:
         return (0.0, 0, 0, [], None)
 
-    correct = sum(1 for p in relevant if p.get("is_correct"))
+    # Only count known answers (is_correct is True/False, not None="未识别")
+    known = [p for p in relevant if p.get("is_correct") is not None]
+    correct = sum(1 for p in known if p.get("is_correct"))
     total = len(relevant)
-    score_pct = (correct / total) * 100 if total > 0 else 0
+    known_total = len(known)
+    # Score based on known answers only; if none are known, score is 0 but total is preserved
+    score_pct = (correct / known_total) * 100 if known_total > 0 else 0.0
 
     error_patterns = _detect_error_patterns(problems, dimension, age_group)
 
@@ -327,7 +341,10 @@ def _get_sub_skill_scores(
         p_type = p.get("type", "")
         sub_skill = PROBLEM_TYPE_TO_SUB_SKILL.get(p_type)
         if sub_skill and sub_skill in sub_skill_data:
-            sub_skill_data[sub_skill].append(p.get("is_correct", False))
+            # Skip unknown (unreadable) answers — don't count as incorrect
+            is_correct = p.get("is_correct")
+            if is_correct is not None:
+                sub_skill_data[sub_skill].append(is_correct)
         # Also map to related sub-skills where applicable
         if dimension == Dimension.ADDITION_SUBTRACTION:
             # Strategy level affects "策略水平" and "运算思维灵活性"
@@ -372,6 +389,155 @@ def _get_sub_skill_scores(
     return results
 
 
+def _get_sub_dimension_scores(
+    problems: List[dict], dimension: str, age_group: str
+) -> List[Dict]:
+    """
+    Return scores for ALL sub-dimensions belonging to `dimension`
+    (per DIMENSION_TO_SUB_DIMENSIONS), aligned to the 13-item SubDimension enum.
+
+    Each entry carries: sub_dimension (enum key), name (display), score,
+    max_score, assessed (bool), correct, total, indicator, why_this_matters.
+
+    Sub-dimensions with no problems on this worksheet are returned with
+    assessed=False / score=0 / total=0 so the UI can show the full PCK
+    picture per dimension (assessed vs. not-assessed-this-time).
+    """
+    all_sub_dims = DIMENSION_TO_SUB_DIMENSIONS.get(dimension, [])
+    if not all_sub_dims:
+        return []
+
+    relevant = [
+        p for p in problems
+        if _map_type_to_dimension(p.get("type")) == dimension
+    ]
+
+    # Group this dimension's problems by their sub-dimension
+    grouped: Dict[str, List[dict]] = {sd: [] for sd in all_sub_dims}
+    for p in relevant:
+        ptype = p.get("type", "")
+        sd = PROBLEM_TYPE_TO_SUB_DIMENSION.get(ptype)
+        # Only count if the mapped sub-dim actually belongs to this dimension
+        if sd and sd in grouped:
+            grouped[sd].append(p)
+
+    results = []
+    for sd in all_sub_dims:
+        sd_problems = grouped[sd]
+        total = len(sd_problems)
+        # Score on known answers only (is_correct is not None) — same口径
+        # as _calculate_dimension_score so sub-dim scores reconcile with the
+        # dimension score.
+        known = [p for p in sd_problems if p.get("is_correct") is not None]
+        correct = sum(1 for p in known if p.get("is_correct"))
+        known_total = len(known)
+        score = round((correct / known_total) * 100, 1) if known_total > 0 else 0.0
+
+        explanation = get_indicator_explanation(sd, age_group) or {}
+
+        results.append({
+            "sub_dimension": sd,
+            "name": get_sub_dimension_display_name(sd),
+            "score": score,
+            "max_score": 100.0,
+            "assessed": total > 0,
+            "correct": correct,
+            "total": total,
+            "indicator": explanation.get("indicator", ""),
+            "why_this_matters": explanation.get("why_this_matters", ""),
+            "evidence_examples": explanation.get("evidence_examples", []),
+            "teaching_tips": explanation.get("teaching_tips", ""),
+        })
+
+    return results
+
+
+def _build_core_experiences(
+    observations: dict,
+    problems: List[dict],
+    assessment: List[Dict],
+    age_group: str,
+) -> Dict:
+    """
+    Build the "本操作单指向核心经验" conclusion block.
+
+    Combines the printed learning_objective (vision-recognized) with the
+    problem-type signal to declare which core experiences (sub-dimensions)
+    this worksheet targets, plus the child's level on each assessed one.
+
+    Returns:
+      {
+        learning_objective: str,
+        targets: [
+          {
+            sub_dimension, name, dimension, dimension_name,
+            source: "assessed"|"pointed",
+            level, level_name, level_emoji,      # only when assessed
+            score, correct, total,                # only when assessed
+            indicator, why_this_matters,
+            evidence_examples, teaching_tips,
+          }, ...
+        ],
+      }
+    """
+    learning_objective = (observations or {}).get("learning_objective", "") or ""
+    # Classify from the worksheet's full printed text (learning objective +
+    # title + instructions) so abstract objectives still get cross-referenced
+    # against the printed context. `learning_objective` above is kept verbatim
+    # for display; the combined text is only used for keyword classification.
+    obs = observations or {}
+    worksheet_text = " ".join(
+        s for s in (
+            learning_objective,
+            obs.get("title", ""),
+            obs.get("instructions", ""),
+        ) if s
+    )
+    targets_raw = classify_core_experiences(worksheet_text, problems)
+
+    # Index sub-dimension data by (dimension, sub_dimension) for quick lookup
+    sd_index: Dict[str, Dict] = {}
+    dim_name_index: Dict[str, str] = {}
+    for dim_assess in assessment:
+        dim = dim_assess.get("dimension")
+        dim_name_index[dim] = dim_assess.get("display_name", "")
+        for sd_entry in dim_assess.get("sub_dimensions", []):
+            sd_index[sd_entry.get("sub_dimension")] = sd_entry
+
+    targets = []
+    for t in targets_raw:
+        sd = t["sub_dimension"]
+        dim = t["dimension"]
+        sd_data = sd_index.get(sd, {})
+        entry = {
+            "sub_dimension": sd,
+            "name": get_sub_dimension_display_name(sd),
+            "dimension": dim,
+            "dimension_name": dim_name_index.get(dim, get_dimension_display_name(dim)),
+            "source": t["source"],
+            "indicator": sd_data.get("indicator", ""),
+            "why_this_matters": sd_data.get("why_this_matters", ""),
+            "evidence_examples": sd_data.get("evidence_examples", []),
+            "teaching_tips": sd_data.get("teaching_tips", ""),
+        }
+        if t["source"] == "assessed":
+            score = sd_data.get("score", 0.0)
+            level = determine_level(score, age_group, dim)
+            level_info = get_level_description(level)
+            entry["score"] = score
+            entry["correct"] = sd_data.get("correct", 0)
+            entry["total"] = sd_data.get("total", 0)
+            entry["level"] = level.value
+            entry["level_name"] = level_info.get("name", "")
+            entry["level_emoji"] = level_info.get("emoji", "")
+        targets.append(entry)
+
+    return {
+        "learning_objective": learning_objective,
+        "targets": targets,
+    }
+
+
 # ─── Main Assessment Function ────────────────────────────────────────
 
 async def assess(
@@ -395,7 +561,22 @@ async def assess(
     age_display = get_age_display_name(age_group)
 
     # Early return for incomplete/blank worksheets
-    if vision_result.get("worksheet_type") == "incomplete" or (not problems and observations.get("overall_pck_notes", "").find("未完成") >= 0):
+    # Check: worksheet_type is "incomplete", OR no problems at all, OR all problems have "未识别"/"未作答" (unreadable)
+    all_unreadable = problems and all(
+        p.get("child_answer", "") in ("未识别", "未作答") or p.get("is_correct") is None
+        for p in problems
+    )
+    if vision_result.get("worksheet_type") == "incomplete" or (not problems and observations.get("overall_pck_notes", "").find("未完成") >= 0) or all_unreadable:
+        # Determine the reason for empty assessment
+        if all_unreadable:
+            benchmark_msg = "AI成功读取了印刷文字和题型分类，但未能识别幼儿的手写作答痕迹（常见于笔迹较淡或圈选模糊的情况）。建议教师手动复核幼儿答案。"
+            summary_msg = f"该操作单（{age_display}）的印刷题目已识别（共{len(problems)}题），但幼儿作答痕迹未能被AI读取。教师可通过「复核模式」手动确认幼儿的答案。"
+        elif vision_result.get("worksheet_type") == "incomplete":
+            benchmark_msg = "本张操作单未作答，无法评估"
+            summary_msg = f"该操作单（{age_display}）尚未被幼儿作答，无法进行评估。请让幼儿完成后重新拍照上传。"
+        else:
+            benchmark_msg = "本张操作单未作答，无法评估"
+            summary_msg = f"该操作单（{age_display}）尚未被幼儿作答，无法进行评估。请让幼儿完成后重新拍照上传。"
         empty_dim = lambda dim: {
             "dimension": dim,
             "display_name": get_dimension_display_name(dim),
@@ -405,11 +586,12 @@ async def assess(
             "level_emoji": "🌱",
             "pck_stage": "",
             "sub_skills": [],
+            "sub_dimensions": _get_sub_dimension_scores([], dim, age_group),
             "error_patterns": [],
-            "age_benchmark_comparison": "本张操作单未作答，无法评估",
+            "age_benchmark_comparison": benchmark_msg,
             "age_milestones": "",
-            "recommendations": "请幼儿完成操作单后重新上传分析",
-            "reasoning_chain": {"summary": "操作单空白，无幼儿作答痕迹可分析"},
+            "recommendations": "请幼儿完成操作单后重新上传分析" if not all_unreadable else "建议教师使用「复核模式」手动确认幼儿答案",
+            "reasoning_chain": {"summary": "操作单空白，无幼儿作答痕迹可分析" if not all_unreadable else "AI已识别印刷题目但未能读取幼儿手写答案"},
             "score_details": {"correct": 0, "total": 0, "strategy_level": None},
         }
         return {
@@ -419,7 +601,12 @@ async def assess(
             "assessment": [empty_dim(d) for d in [Dimension.COUNTING, Dimension.ADDITION_SUBTRACTION, Dimension.SHAPES_SPACE, Dimension.PATTERNS]],
             "dimension_problems": {},
             "observations": observations,
-            "overall_summary": f"该操作单（{age_display}）尚未被幼儿作答，无法进行评估。请让幼儿完成后重新拍照上传。",
+            "overall_summary": summary_msg,
+            "core_experiences": _build_core_experiences(
+                observations, problems,
+                [empty_dim(d) for d in [Dimension.COUNTING, Dimension.ADDITION_SUBTRACTION, Dimension.SHAPES_SPACE, Dimension.PATTERNS]],
+                age_group,
+            ),
             "generated_at": None,
         }
 
@@ -455,6 +642,11 @@ async def assess(
         # Get granular sub-skill scores
         sub_skills = _get_sub_skill_scores(problems, dim, score_pct)
 
+        # Get 13-sub-dimension breakdown (assessed + not-assessed-this-time),
+        # aligned to the SubDimension enum — single source of truth for the
+        # main UI card's sub-dimension display.
+        sub_dimensions = _get_sub_dimension_scores(problems, dim, age_group)
+
         # Build PCK reasoning chain (explainable AI core)
         reasoning_chain = _build_reasoning_chain(
             dimension=dim,
@@ -468,6 +660,14 @@ async def assess(
             problems=problems,
         )
 
+        # Count unreadable answers for this dimension
+        dim_problems_for_details = [
+            p for p in problems
+            if _map_type_to_dimension(p.get("type")) == dim
+        ]
+        unreadable_count = sum(1 for p in dim_problems_for_details if p.get("is_correct") is None)
+        known_total = len(dim_problems_for_details) - unreadable_count
+
         dim_assessment = {
             "dimension": dim,
             "display_name": get_dimension_display_name(dim),
@@ -477,6 +677,7 @@ async def assess(
             "level_emoji": level_info.get("emoji", ""),
             "pck_stage": pck_stage,
             "sub_skills": sub_skills,
+            "sub_dimensions": sub_dimensions,
             "error_patterns": [
                 ep["detail"] for ep in error_patterns
             ],
@@ -487,6 +688,8 @@ async def assess(
             "score_details": {
                 "correct": correct,
                 "total": total,
+                "known_total": known_total,
+                "unreadable": unreadable_count,
                 "strategy_level": strategy_level,
             },
         }
@@ -552,6 +755,9 @@ async def assess(
         "dimension_problems": dimension_problems,
         "observations": observations,
         "overall_summary": overall,
+        "core_experiences": _build_core_experiences(
+            observations, problems, assessment, age_group
+        ),
         "generated_at": None,  # Set by caller
     }
 
@@ -1138,7 +1344,7 @@ def generate_evaluation_trace(
             continue
 
         # Group by sub-dimension
-        sub_dim_groups = {}
+        sub_dim_groups: Dict[str, List[dict]] = {}
         for p in dim_problems:
             ptype = p.get("type", "")
             sub_dim = PROBLEM_TYPE_TO_SUB_DIMENSION.get(ptype, "")
@@ -1146,9 +1352,19 @@ def generate_evaluation_trace(
                 sub_dim_groups[sub_dim] = []
             sub_dim_groups[sub_dim].append(p)
 
-        # Build sub-dimension traces
+        # Build sub-dimension traces — iterate the FULL ordered list of
+        # sub-dimensions for this dimension so未考查 ones also appear (with
+        # assessed=False, empty problems). Append any grouped sub-dim not in
+        # the canonical list (defensive: handles problem-type → sub-dim
+        # mappings that don't belong to this dimension by the book).
+        all_sub_dims = list(DIMENSION_TO_SUB_DIMENSIONS.get(dim, []))
+        for sd in sub_dim_groups:
+            if sd and sd not in all_sub_dims:
+                all_sub_dims.append(sd)
+
         sub_traces = []
-        for sub_dim, sub_problems in sub_dim_groups.items():
+        for sub_dim in all_sub_dims:
+            sub_problems = sub_dim_groups.get(sub_dim, [])
             # Get PCK explanation for this sub-dim × age group
             explanation = get_indicator_explanation(sub_dim, age_group)
             indicator_text = explanation.get("indicator", "") if explanation else ""
@@ -1211,6 +1427,7 @@ def generate_evaluation_trace(
                 "score": sub_score,
                 "correct": correct_count,
                 "total": total_count,
+                "assessed": total_count > 0,
                 "problems": problem_details,
             })
 

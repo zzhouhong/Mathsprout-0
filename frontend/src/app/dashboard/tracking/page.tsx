@@ -34,6 +34,16 @@ interface GrowthData {
   assessment_count: number;
   trajectories: Trajectory[];
   overall_growth_summary: string;
+  error_evolution: ErrorEvolution[];
+}
+
+interface ErrorEvolution {
+  error: string;
+  first_seen: string;
+  last_seen: string;
+  count: number;
+  dates: string[];
+  status: "resolved" | "recurring" | "new";
 }
 
 interface ChildRecord {
@@ -41,6 +51,20 @@ interface ChildRecord {
   name: string;
   age_group: string;
 }
+
+const DIM_DISPLAY: Record<string, string> = {
+  counting: "数概念与数数",
+  addition_sub: "加减运算",
+  shapes_space: "图形与空间",
+  patterns: "集合与模式",
+};
+
+const TREND_EMOJI: Record<string, { emoji: string; text: string }> = {
+  up: { emoji: "📈", text: "上升" },
+  down: { emoji: "📉", text: "下降" },
+  stable: { emoji: "➡️", text: "稳定" },
+  insufficient_data: { emoji: "•", text: "数据不足" },
+};
 
 const DIM_COLORS: Record<string, string> = {
   counting: "#6366f1",
@@ -72,8 +96,42 @@ export default function TrackingPage() {
     setLoading(true);
     try {
       const { api } = await import("@/lib/api-client");
-      const data = await api.tracking.demoTrajectory(child.age_group, child.name);
-      setGrowthData(data);
+      const t = await api.dashboard.childTrajectory(child.id);
+      // Adapt DB trajectory → GrowthData shape used by the charts below
+      const dimOrder = ["counting", "addition_sub", "shapes_space", "patterns"];
+      const trajectories: Trajectory[] = dimOrder.map((dim) => {
+        const series = t.dimensions[dim] || [];
+        const has = series.length > 0;
+        const first = series[0];
+        const last = series[series.length - 1];
+        const trend = t.trends[dim] || "insufficient_data";
+        const te = TREND_EMOJI[trend] || TREND_EMOJI.insufficient_data;
+        return {
+          dimension: dim,
+          display_name: DIM_DISPLAY[dim] || dim,
+          has_data: has,
+          first_score: first?.score,
+          latest_score: last?.score,
+          delta: has && first && last ? last.score - first.score : undefined,
+          trend,
+          trend_emoji: te.emoji,
+          trend_text: te.text,
+          chart_points: series.map((s) => ({ x: s.date || "", y: s.score, level: s.level })),
+          assessment_count: series.length,
+        };
+      });
+      const summary = t.assessment_count === 0
+        ? "暂无历史评估数据，完成首次分析后可查看成长轨迹。"
+        : `共 ${t.assessment_count} 次评估记录，覆盖 ${trajectories.filter((x) => x.has_data).length} 个维度。`;
+      setGrowthData({
+        child_name: t.child_name,
+        age_group: t.age_group,
+        has_data: t.assessment_count > 0,
+        assessment_count: t.assessment_count,
+        trajectories,
+        overall_growth_summary: summary,
+        error_evolution: t.error_evolution || [],
+      });
     } catch {
       toast.error("加载成长轨迹失败");
     } finally {
@@ -201,8 +259,8 @@ export default function TrackingPage() {
                     </h3>
                     {trajectory.trend_emoji && (
                       <Badge className={
-                        trajectory.trend === "improving" ? "bg-green-100 text-green-700" :
-                        trajectory.trend === "declining" ? "bg-red-100 text-red-700" :
+                        trajectory.trend === "up" ? "bg-green-100 text-green-700" :
+                        trajectory.trend === "down" ? "bg-red-100 text-red-700" :
                         "bg-slate-100 text-slate-600"
                       }>
                         {trajectory.trend_emoji} {trajectory.trend_text}
@@ -233,6 +291,38 @@ export default function TrackingPage() {
               </Card>
             ))}
         </div>
+      )}
+
+      {/* B7: Error-pattern evolution timeline */}
+      {!loading && growthData?.has_data && growthData.error_evolution.length > 0 && (
+        <Card className="p-5">
+          <div className="flex items-center gap-2 mb-1">
+            <span className="text-lg">🔬</span>
+            <h3 className="font-semibold text-slate-700">错误模式演变时间线</h3>
+          </div>
+          <p className="text-xs text-slate-500 mb-4">
+            追踪各类错误模式在历次评估中的消退与反复——绿色=已克服，橙色=反复出现，红色=本次新出现。
+          </p>
+          <div className="space-y-2">
+            {growthData.error_evolution.map((e, i) => {
+              const palette = e.status === "resolved"
+                ? { bg: "bg-emerald-50", border: "border-emerald-200", dot: "bg-emerald-500", label: "已克服", labelColor: "text-emerald-700" }
+                : e.status === "recurring"
+                ? { bg: "bg-amber-50", border: "border-amber-200", dot: "bg-amber-500", label: "反复出现", labelColor: "text-amber-700" }
+                : { bg: "bg-rose-50", border: "border-rose-200", dot: "bg-rose-500", label: "本次新出现", labelColor: "text-rose-700" };
+              return (
+                <div key={i} className={`flex items-center gap-3 rounded-lg border ${palette.border} ${palette.bg} px-3 py-2`}>
+                  <span className={`w-2.5 h-2.5 rounded-full flex-shrink-0 ${palette.dot}`} />
+                  <span className="text-sm text-slate-700 font-medium flex-1 truncate">{e.error}</span>
+                  <span className={`text-[10px] font-semibold ${palette.labelColor}`}>{palette.label}</span>
+                  <span className="text-[11px] text-slate-400 flex-shrink-0">
+                    {e.first_seen} → {e.last_seen} · {e.count}次
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+        </Card>
       )}
 
       {/* Comparison View */}

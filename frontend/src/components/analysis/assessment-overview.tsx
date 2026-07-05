@@ -4,6 +4,7 @@ import { useState } from "react";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import type { AssessmentResult, DimensionProblemGroup } from "@/lib/api-client";
+import { SubDimensionDetailList } from "./sub-dimension-detail";
 
 const LEVEL_COLORS: Record<string, string> = {
   L1: "bg-red-100 text-red-700 border-red-200",
@@ -28,31 +29,45 @@ export function AssessmentOverview({ assessment }: AssessmentOverviewProps) {
 
   const dimProblems = assessment.dimension_problems || {};
 
+  // Only show dimensions this worksheet actually covered (had problems of
+  // that type). Uncovered dimensions are hidden so teachers don't misread
+  // 0% as "child is failing" — they simply aren't assessed here.
+  const covered = assessment.assessment.filter(
+    (d) => (d.score_details?.total || 0) > 0
+  );
+
   const toggleExpand = (dim: string) => {
     setExpandedDim((prev) => (prev === dim ? null : dim));
   };
 
   return (
     <Card className="p-6">
-      <h2 className="text-lg font-bold text-slate-800 mb-4">
+      <h2 className="text-lg font-bold text-slate-800 mb-1">
         📊 {assessment.child_name} · {assessment.age_display} · 能力评估
       </h2>
+      <p className="text-xs text-slate-500 mb-4">
+        本操作单涉及 <span className="font-semibold text-indigo-600">{covered.length}</span> 个维度
+      </p>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-        {assessment.assessment.map((dim) => {
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        {covered.map((dim) => {
           const dimGroup: DimensionProblemGroup | undefined = dimProblems[dim.dimension];
           const isExpanded = expandedDim === dim.dimension;
 
           return (
-            <div key={dim.dimension}>
+            <div
+              key={dim.dimension}
+              className={`rounded-xl border-2 transition-colors overflow-hidden ${
+                isExpanded ? "border-indigo-400 shadow-md" : "border-slate-200"
+              }`}
+            >
+              {/* Dimension header — click to expand problem detail */}
               <div
-                onClick={() => toggleExpand(dim.dimension)}
-                className={`bg-slate-50 rounded-xl p-4 border-2 transition-colors cursor-pointer hover:border-indigo-300 ${
-                  isExpanded ? "border-indigo-400 shadow-md" : "border-slate-200"
-                }`}
+                onClick={() => dimGroup && toggleExpand(dim.dimension)}
+                className={`bg-slate-50 p-4 ${dimGroup ? "cursor-pointer hover:border-indigo-300" : ""}`}
               >
                 <div className="flex items-center justify-between mb-2">
-                  <span className="text-sm font-medium text-slate-600">
+                  <span className="text-sm font-bold text-slate-700">
                     {DIMENSION_ICONS[dim.dimension] || "📋"} {dim.display_name}
                   </span>
                   <Badge
@@ -61,15 +76,14 @@ export function AssessmentOverview({ assessment }: AssessmentOverviewProps) {
                     {dim.level_emoji} {dim.level_name}
                   </Badge>
                 </div>
-                <div className="text-2xl font-bold text-slate-800">
-                  {dim.score}%
+                <div className="flex items-baseline gap-2">
+                  <span className="text-2xl font-bold text-slate-800">
+                    {dim.score}%
+                  </span>
+                  <span className="text-xs text-slate-500">
+                    {dim.score_details.correct}/{dim.score_details.total} 题正确
+                  </span>
                 </div>
-                <p className="text-xs text-slate-500 mt-1">
-                  {dim.score_details.correct}/{dim.score_details.total} 题正确
-                  {dimGroup && (
-                    <span className="text-indigo-500 ml-1">· 点击查看详情</span>
-                  )}
-                </p>
                 {dim.error_patterns.length > 0 && (
                   <div className="mt-2 space-y-1">
                     {dim.error_patterns.map((err, i) => (
@@ -82,11 +96,27 @@ export function AssessmentOverview({ assessment }: AssessmentOverviewProps) {
                     ))}
                   </div>
                 )}
+                {dimGroup && (
+                  <p className="text-xs text-indigo-500 mt-2">
+                    {isExpanded ? "▾ 收起题目明细" : "▸ 查看题目明细与维度分析"}
+                  </p>
+                )}
               </div>
 
-              {/* ── Expanded: problem-level detail + dimension analysis ── */}
+              {/* ── Sub-dimension scores — ALWAYS visible ── */}
+              <div className="p-4 bg-white border-t border-slate-100">
+                <h5 className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2 flex items-center gap-1">
+                  🎯 子维度评分与PCK指标
+                </h5>
+                <SubDimensionDetailList
+                  subDimensions={dim.sub_dimensions}
+                  compact
+                />
+              </div>
+
+              {/* ── Expandable: problem-level detail + dimension analysis ── */}
               {isExpanded && dimGroup && (
-                <div className="mt-2 p-4 bg-white rounded-xl border-2 border-indigo-200 shadow-sm space-y-3">
+                <div className="p-4 bg-indigo-50/40 border-t border-indigo-100 space-y-3">
                   {/* Problem list */}
                   <div>
                     <h5 className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">
@@ -102,18 +132,18 @@ export function AssessmentOverview({ assessment }: AssessmentOverviewProps) {
                               : "bg-red-50 border border-red-100"
                           }`}
                         >
-                          <div className="flex items-center gap-2">
+                          <div className="flex items-center gap-2 min-w-0">
                             <span className="text-xs font-mono text-slate-400">
                               {p.id}
                             </span>
-                            <span className="text-xs bg-slate-100 px-1.5 py-0.5 rounded text-slate-600">
+                            <span className="text-xs bg-slate-100 px-1.5 py-0.5 rounded text-slate-600 flex-shrink-0">
                               {p.type_name}
                             </span>
-                            <span className="font-medium text-slate-700">
+                            <span className="font-medium text-slate-700 truncate">
                               答: {p.child_answer}
                             </span>
                           </div>
-                          <div className="flex items-center gap-2 text-xs">
+                          <div className="flex items-center gap-2 text-xs flex-shrink-0">
                             {!p.is_correct && (
                               <span className="text-red-500">
                                 正确: {p.correct_answer}

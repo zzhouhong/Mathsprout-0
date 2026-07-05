@@ -1,0 +1,12 @@
+{
+  "description": "单题场景 — 只有一道计数的操作单，验证单题边界",
+  "child": "小点点",
+  "age": "small",
+  "vision": {
+    "worksheet_type": "single",
+    "problems": [
+      {"id": "P1", "type": "counting", "child_answer": "3", "correct_answer": "3", "is_correct": true, "confidence": 0.9, "handwriting_quality": "clear", "has_erasure": false, "erasure_pattern": "none", "strategy_indicators": "counting_objects"}
+    ],
+    "observations": {"overall_pck_notes": "仅一道点数题，幼儿能正确手口一致地点数"}
+  }
+}
