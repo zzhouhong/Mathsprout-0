@@ -374,6 +374,7 @@ export interface AuthUser {
   email: string;
   name: string;
   role: "teacher" | "admin" | "parent";
+  child_id?: number | null;
 }
 
 export interface LoginResponse {
@@ -921,6 +922,39 @@ export const api = {
       a.click();
       document.body.removeChild(a);
       window.URL.revokeObjectURL(downloadUrl);
+    },
+  },
+
+  // ── Parent (家长端专用接口) ─────────────────────────────────────
+
+  parent: {
+    /** 取绑定幼儿的最新家长报告（精简结构）。无报告时 has_report=false。 */
+    async latestReport(childId: number) {
+      const params = new URLSearchParams({ child_id: String(childId) });
+      return request<{
+        has_report: boolean;
+        message?: string;
+        report_id?: number;
+        generated_at?: string;
+        overall_summary?: string;
+        strengths?: string[];
+        growing_areas?: string[];
+        family_activities?: string[];
+        learning_quality_notes?: string;
+        parent_tips?: string;
+      }>(`/api/v1/parent/latest-report?${params}`);
+    },
+
+    /** 取绑定幼儿的基本信息（姓名/年龄段）。 */
+    async childProfile(childId: number) {
+      const params = new URLSearchParams({ child_id: String(childId) });
+      return request<{
+        child_id: number;
+        name: string;
+        age_group: string;
+        class_name: string;
+        notes: string;
+      }>(`/api/v1/parent/child-profile?${params}`);
     },
   },
 

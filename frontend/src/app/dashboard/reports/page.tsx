@@ -106,7 +106,7 @@ export default function ReportsPage() {
             {selectedChild ? `${selectedChild} 还没有分析报告` : "请先选择幼儿"}
           </p>
           <Link
-            href="/dashboard/analyze"
+            href="/dashboard/assessment"
             className="px-4 py-2 rounded-lg bg-indigo-600 text-white text-sm hover:bg-indigo-700"
           >
             📸 开始分析
@@ -165,7 +165,7 @@ export default function ReportsPage() {
             <h3 className="font-medium text-slate-700">演示家长报告</h3>
           </Card>
         </Link>
-        <Link href="/dashboard/analyze">
+        <Link href="/dashboard/assessment">
           <Card className="p-4 hover:shadow-md text-center cursor-pointer border-amber-100 hover:border-amber-300">
             <div className="text-2xl mb-2">📸</div>
             <h3 className="font-medium text-slate-700">上传新操作单</h3>

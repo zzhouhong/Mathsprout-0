@@ -84,7 +84,7 @@ export default function ChildReportsPage() {
           )}
         </div>
         <Link
-          href={`/dashboard/analyze?child=${encodeURIComponent(child?.name || "")}&age=${child?.age_group || "middle"}`}
+          href={`/dashboard/assessment?child=${encodeURIComponent(child?.name || "")}&age=${child?.age_group || "middle"}`}
           className="px-4 py-2 rounded-xl bg-indigo-600 text-white text-sm font-medium hover:bg-indigo-700 transition-colors"
         >
           📸 新分析

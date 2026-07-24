@@ -22,6 +22,7 @@ export default function ParentPage() {
   const [report, setReport] = useState<ParentReport | null>(null);
   const [childName, setChildName] = useState("");
   const [error, setError] = useState("");
+  const [noReport, setNoReport] = useState(false);
 
   const handleAccess = async () => {
     const code = accessCode.trim();
@@ -34,22 +35,61 @@ export default function ParentPage() {
     setError("");
 
     try {
-      // Step 1: Authenticate with parent access code
       const { api } = await import("@/lib/api-client");
-      const loginRes = await api.auth.parentAccess(code);
 
-      if (!loginRes.access_token) {
-        throw new Error("访问码验证失败");
+      // Step 1: 用访问码绑定幼儿，拿到 child_id 与姓名
+      const bindRes = await fetch(`${process.env.NEXT_PUBLIC_API_URL || ""}/api/v1/parent/bind`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ access_code: code }),
+      });
+      if (!bindRes.ok) {
+        const err = await bindRes.json().catch(() => ({}));
+        throw new Error(err.detail || "访问码无效，请检查后重试");
       }
+      const bindData = await bindRes.json();
+      const childId = bindData.child_id as number;
+      const name = (bindData.child_name as string) || "宝宝";
 
-      // Step 2: Get child's demo parent report
-      // In production, this would look up the actual report by child_id
-      const childId = loginRes.user?.child_id;
-      const reportData = await api.reports.demoParent("middle", "宝宝");
-      setReport(reportData);
-      setChildName("宝宝");
-      setScreen("report");
-      toast.success("验证成功！欢迎查看宝宝的学习观察记录 🌈");
+      // Step 2: 取该幼儿的真实最新家长报告
+      const latest = await api.parent.latestReport(childId);
+
+      if (latest.has_report) {
+        // 有真实报告 —— 将 latest-report 的精简结构适配为 ParentReport 展示结构
+        const toItems = (arr?: string[]) =>
+          (arr || []).map((text) => ({
+            area: text,
+            emoji: "⭐",
+            description: text,
+            parent_observation_tip: "",
+          }));
+        setReport({
+          child_name: name,
+          age_group: bindData.age_group || "middle",
+          generated_at: latest.generated_at || "",
+          report_type: "parent",
+          overall_summary: latest.overall_summary || "",
+          strengths: toItems(latest.strengths),
+          growing_areas: toItems(latest.growing_areas),
+          family_activities: (latest.family_activities || []).map((t) => ({
+            title: t,
+            materials: "",
+            steps: t,
+            math_concept: "",
+          })),
+          learning_quality_notes: latest.learning_quality_notes || "",
+          parent_tips: latest.parent_tips || "",
+        } as unknown as ParentReport);
+        setChildName(name);
+        setScreen("report");
+        toast.success("验证成功！欢迎查看宝宝的学习观察记录 🌈");
+      } else {
+        // 暂无报告 —— 友好提示，引导联系老师
+        setChildName(name);
+        setNoReport(true);
+        setScreen("login");
+        toast.info(latest.message || "该幼儿暂无分析报告，请联系老师生成");
+      }
     } catch (err) {
       const message = err instanceof Error ? err.message : "访问码无效";
       setError(message);
@@ -93,6 +133,12 @@ export default function ParentPage() {
             />
             {error && (
               <p className="text-sm text-red-500 mt-2">{error}</p>
+            )}
+            {noReport && !error && (
+              <p className="text-sm text-amber-600 mt-2 bg-amber-50 p-2.5 rounded-lg border border-amber-200">
+                ✅ 访问码正确（{childName}），但该幼儿暂无分析报告。
+                <br />请联系老师先上传操作单生成报告。
+              </p>
             )}
           </div>
 

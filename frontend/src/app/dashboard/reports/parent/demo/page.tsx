@@ -137,7 +137,7 @@ export default function ParentReportDemo() {
             📝 查看演示教师报告
           </Link>
           <Link
-            href="/dashboard/analyze"
+            href="/dashboard/assessment"
             className="text-sm text-indigo-600 hover:text-indigo-800"
           >
             📸 上传操作单分析

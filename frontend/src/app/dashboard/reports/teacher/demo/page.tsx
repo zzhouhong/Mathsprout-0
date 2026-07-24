@@ -123,7 +123,7 @@ export default function TeacherReportDemo() {
             💚 查看演示家长报告
           </Link>
           <Link
-            href="/dashboard/analyze"
+            href="/dashboard/assessment"
             className="text-sm text-indigo-600 hover:text-indigo-800"
           >
             📸 上传操作单分析
