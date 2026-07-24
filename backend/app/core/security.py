@@ -192,11 +192,21 @@ async def get_current_parent(
 
 def verify_parent_access(child_id: int, access_code: str) -> bool:
     """
-    Verify a parent access code for a specific child.
-    In production, looks up the code from the database.
-    For MVP, accepts any 8-char alphanumeric code.
+    [已弃用] 此前的实现仅校验长度即放行，存在鉴权绕过风险（任意 6 位字符串即可通过）。
+
+    家长访问码的真实校验现已在 ``app/api/routes/auth.py`` 的 ``/parent`` 端点
+    通过查询数据库（Child.parent_access_code）完成。请勿再调用本函数；
+    如需在路由中校验访问码，请直接在端点内用 ``db.get(Child, child_id)``
+    比对 ``child.parent_access_code``。
+
+    此处保留仅为向后兼容，不再保证安全语义。
     """
+    import warnings
+    warnings.warn(
+        "verify_parent_access 已弃用且不再安全，请在路由内直接查 DB 校验访问码。",
+        DeprecationWarning,
+        stacklevel=2,
+    )
     if not access_code or len(access_code) < 6:
         return False
-    # In production: query DB for child's parent_access_code
     return True
