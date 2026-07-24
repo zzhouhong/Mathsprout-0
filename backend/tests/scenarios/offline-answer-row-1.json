@@ -1,0 +1,39 @@
+{
+  "description": "离线识别结果 → 评估闭环验证",
+  "child": "测试幼儿",
+  "age": "middle",
+  "vision": {
+    "worksheet_type": "mixed",
+    "age_group_hint": "middle",
+    "problems": [
+      {
+        "id": "P1",
+        "type": "shape_id",
+        "dimension": "shapes_space",
+        "correct_answer": "2",
+        "child_answer": "2",
+        "is_correct": true,
+        "confidence": 0.7,
+        "handwriting_quality": "clear",
+        "has_erasure": false,
+        "erasure_pattern": "none",
+        "strategy_indicators": "",
+        "prompt_description": "感知三角形变式，底部数字行 1-5 供圈选，正确答案为 2"
+      }
+    ],
+    "observations": {
+      "learning_objective": "感知三角形的多种变式，体会图形的翻转与位置变化",
+      "number_formation_issues": [],
+      "attention_indicators": "careful",
+      "task_completion_context": "independent",
+      "overall_pck_notes": "图形识别任务，幼儿在底部数字行圈选了正确数字"
+    },
+    "dimension_scores_preliminary": {
+      "shapes_space": {
+        "correct": 1,
+        "total": 1,
+        "score": 100
+      }
+    }
+  }
+}
