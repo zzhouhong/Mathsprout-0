@@ -39,4 +39,8 @@ Page({
   goCapture() {
     wx.navigateTo({ url: "/pages/teacher/capture/capture" });
   },
+
+  goGenerate() {
+    wx.navigateTo({ url: "/pages/teacher/generate/generate" });
+  },
 });

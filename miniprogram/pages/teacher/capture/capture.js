@@ -6,6 +6,41 @@ Page({
     analyzing: false,
     error: "",
     result: null,
+    // 幼儿选择
+    children: [],
+    childIndex: -1,
+    childNames: [],
+    selectedChildId: null,
+    selectedAgeGroup: "middle",
+  },
+
+  onLoad() {
+    // 加载幼儿列表供选择
+    api.getChildren()
+      .then((r) => {
+        const children = r.children || r.data || [];
+        this.setData({
+          children,
+          childNames: children.map((c) => c.name + (c.class_name ? "（" + c.class_name + "）" : "")),
+        });
+      })
+      .catch(() => {
+        // 加载失败不阻断，教师仍可匿名分析
+      });
+  },
+
+  onChildChange(e) {
+    const idx = Number(e.detail.value);
+    const child = this.data.children[idx];
+    this.setData({
+      childIndex: idx,
+      selectedChildId: child ? child.id : null,
+      selectedAgeGroup: child ? (child.age_group || "middle") : "middle",
+    });
+  },
+
+  onAgeChange(e) {
+    this.setData({ selectedAgeGroup: e.detail.value });
   },
 
   takePhoto() {
@@ -39,7 +74,17 @@ Page({
     this.setData({ analyzing: true, error: "", result: null });
 
     try {
-      const res = await api.uploadAndAnalyze(this.data.src, {});
+      // 构造完整 formData：age_group + child_id + child_name，使分析结果可持久化到幼儿档案
+      const child = this.data.childIndex >= 0 ? this.data.children[this.data.childIndex] : null;
+      const formData = {
+        age_group: this.data.selectedAgeGroup,
+        child_name: child ? child.name : "小朋友",
+      };
+      if (child) {
+        formData.child_id = String(child.id);
+      }
+
+      const res = await api.uploadAndAnalyze(this.data.src, formData);
 
       const assessment = res.assessment?.assessment || res.assessment || [];
       const dims = (Array.isArray(assessment) ? assessment : []).map((d) => ({
@@ -49,6 +94,7 @@ Page({
       }));
 
       this.setData({ result: { dims } });
+      wx.showToast({ title: "分析完成，已保存", icon: "success" });
     } catch (e) {
       this.setData({ error: e.message || "分析失败，请重试" });
     } finally {

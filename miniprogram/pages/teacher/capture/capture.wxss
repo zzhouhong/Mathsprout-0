@@ -5,3 +5,11 @@
 .btn-primary { background:#4F46E5; color:#fff; border-radius:16rpx; }
 .result { background:#fff; border-radius:16rpx; padding:32rpx; margin-top:24rpx; }
 .score { font-size:28rpx; color:#475569; padding:12rpx 0; border-bottom:1rpx solid #F1F5F9; }
+
+/* 幼儿与年龄段选择器 */
+.selector-section { background:#fff; border-radius:16rpx; padding:24rpx; margin-bottom:24rpx; }
+.selector-item { display:flex; align-items:center; padding:16rpx 0; border-bottom:1rpx solid #F1F5F9; }
+.selector-item:last-child { border-bottom:none; }
+.selector-label { font-size:28rpx; color:#64748B; width:120rpx; flex-shrink:0; }
+.picker-value { font-size:28rpx; color:#1E293B; flex:1; }
+.picker-loading { color:#94A3B8; }

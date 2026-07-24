@@ -2,6 +2,25 @@
 <view class="container">
   <view class="header">📸 拍照分析</view>
 
+  <!-- 幼儿与年龄段选择 -->
+  <view class="selector-section">
+    <view class="selector-item">
+      <text class="selector-label">幼儿</text>
+      <picker bindchange="onChildChange" value="{{childIndex}}" range="{{childNames}}" wx:if="{{childNames.length}}">
+        <view class="picker-value">{{childIndex >= 0 ? childNames[childIndex] : '请选择幼儿'}}</view>
+      </picker>
+      <view class="picker-value picker-loading" wx:else>加载幼儿列表中...</view>
+    </view>
+    <view class="selector-item">
+      <text class="selector-label">年龄段</text>
+      <picker bindchange="onAgeChange" value="{{['small','middle','large'].indexOf(selectedAgeGroup)}}" range="{{['小班（3-4岁）','中班（4-5岁）','大班（5-6岁）']}}">
+        <view class="picker-value">
+          {{selectedAgeGroup === 'small' ? '小班（3-4岁）' : selectedAgeGroup === 'large' ? '大班（5-6岁）' : '中班（4-5岁）'}}
+        </view>
+      </picker>
+    </view>
+  </view>
+
   <!-- 预览区 -->
   <view class="preview" wx:if="{{src}}">
     <image src="{{src}}" mode="aspectFit" style="width:100%;height:500rpx" />

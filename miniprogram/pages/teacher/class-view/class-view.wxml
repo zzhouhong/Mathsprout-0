@@ -27,5 +27,8 @@
     </view>
   </block>
 
-  <button class="btn-primary" bindtap="goCapture" style="margin-top:24rpx">📸 拍照分析</button>
+  <view class="action-row">
+    <button class="btn-primary" bindtap="goCapture">📸 拍照分析</button>
+    <button class="btn-secondary" bindtap="goGenerate">📚 生成操作单</button>
+  </view>
 </view>

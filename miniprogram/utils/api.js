@@ -157,4 +157,13 @@ module.exports = {
 
   uploadAndAnalyze: (filePath, formData) =>
     uploadFile("/worksheets/demo", filePath, formData),
+
+  // ─── 工作单生成 ───────────────────────────────
+  generateWorksheet: (params) => {
+    const qs = Object.keys(params)
+      .filter((k) => params[k] !== undefined && params[k] !== null && params[k] !== "")
+      .map((k) => encodeURIComponent(k) + "=" + encodeURIComponent(params[k]))
+      .join("&");
+    return request("/worksheets/generate?" + qs, { auth: true, showLoading: true });
+  },
 };
