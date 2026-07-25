@@ -146,8 +146,17 @@ module.exports = {
   getChildren: () =>
     request("/children", { auth: true }),
 
+  createChild: (data) =>
+    request("/children", { method: "POST", auth: true, data }),
+
   getChildDetail: (childId) =>
     request("/children/" + childId, { auth: true }),
+
+  updateChild: (childId, data) =>
+    request("/children/" + childId, { method: "PUT", auth: true, data }),
+
+  deleteChild: (childId) =>
+    request("/children/" + childId, { method: "DELETE", auth: true }),
 
   getChildReports: (childId) =>
     request("/reports/history/" + childId, { auth: true, showLoading: true }),

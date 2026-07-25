@@ -21,14 +21,14 @@
       <view class="date" wx:if="{{report.generated_at}}">最近更新：{{report.generated_at}}</view>
       <view class="summary-text">{{report.overall_summary}}</view>
 
-      <view class="strength-section" wx:if="{{report.strengths.length}}">
+      <view class="strength-section" wx:if="{{report.strengths && report.strengths.length}}">
         <view class="section-title">✨ 闪光时刻</view>
         <view class="tag-list">
           <view class="tag tag-green" wx:for="{{report.strengths}}" wx:key="area">{{item.area}}</view>
         </view>
       </view>
 
-      <view class="activity-section" wx:if="{{report.family_activities.length}}">
+      <view class="activity-section" wx:if="{{report.family_activities && report.family_activities.length}}">
         <view class="section-title">🎮 家庭游戏推荐</view>
         <view class="activity-item" wx:for="{{report.family_activities}}" wx:key="title" wx:for-item="act">
           <view class="act-title">{{act.title}}</view>
@@ -52,6 +52,12 @@
         <view class="trend-dim">{{item.dimension}}</view>
         <view class="trend-arrow">{{item.trend === 'up' ? '⬆️' : item.trend === 'down' ? '⬇️' : '➡️'}}</view>
       </view>
+    </view>
+
+    <!-- 切换/解绑 -->
+    <view class="switch-row">
+      <navigator url="/pages/index/index" open-type="redirect" class="switch-link">🔁 切换幼儿</navigator>
+      <view class="switch-link switch-unbind" bindtap="onUnbind">🚪 解除绑定</view>
     </view>
   </block>
 </view>

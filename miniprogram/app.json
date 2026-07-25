@@ -8,7 +8,8 @@
     "pages/teacher/capture/capture",
     "pages/teacher/class-view/class-view",
     "pages/teacher/child-detail/child-detail",
-    "pages/teacher/generate/generate"
+    "pages/teacher/generate/generate",
+    "pages/teacher/child-form/child-form"
   ],
   "window": {
     "navigationBarBackgroundColor": "#4F46E5",

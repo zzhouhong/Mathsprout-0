@@ -9,6 +9,13 @@ Page({
   },
 
   onLoad(options) {
+    // 冷启动后从 storage 恢复绑定信息
+    const stored = wx.getStorageSync("bindInfo");
+    if (stored && stored.childId) {
+      app.globalData.childId = stored.childId;
+      app.globalData.childName = stored.childName;
+    }
+
     const childId = app.globalData.childId;
     if (!childId) {
       wx.redirectTo({ url: "/pages/index/index" });
@@ -31,5 +38,13 @@ Page({
   onPullDownRefresh() {
     this.onLoad(this.options || {});
     setTimeout(() => wx.stopPullDownRefresh(), 1000);
+  },
+
+  onShareAppMessage() {
+    const name = (app.globalData.childName || "") ;
+    return {
+      title: name ? name + "的成长报告 📊" : "萌芽数学 · 成长报告",
+      path: "/pages/index/index",
+    };
   },
 });

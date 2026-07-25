@@ -43,4 +43,8 @@ Page({
   goGenerate() {
     wx.navigateTo({ url: "/pages/teacher/generate/generate" });
   },
+
+  goAddChild() {
+    wx.navigateTo({ url: "/pages/teacher/child-form/child-form" });
+  },
 });

@@ -86,6 +86,7 @@ Page({
 
       const res = await api.uploadAndAnalyze(this.data.src, formData);
 
+      // 提取完整分析结果（之前只取维度分数，丢弃了教学建议等核心价值）
       const assessment = res.assessment?.assessment || res.assessment || [];
       const dims = (Array.isArray(assessment) ? assessment : []).map((d) => ({
         name: d.display_name || d.dimension || "",
@@ -93,12 +94,57 @@ Page({
         level: (d.level_emoji || "") + (d.level_name || ""),
       }));
 
-      this.setData({ result: { dims } });
-      wx.showToast({ title: "分析完成，已保存", icon: "success" });
+      // 教师报告：总评 + 教学建议
+      const teacher = res.reports?.teacher || {};
+      const suggestions = Object.entries(teacher.teaching_suggestions || {}).map(
+        ([dim, s]) => ({
+          dimension: dim,
+          level: s.level || "",
+          recommendations: s.recommendations || "",
+          activities: s.classroom_activities || "",
+        })
+      );
+
+      // 每题识别明细（evaluation_trace）
+      const traces = Array.isArray(res.evaluation_trace) ? res.evaluation_trace.map((t) => ({
+        problem: t.problem_text || t.id || "",
+        dimension: t.dimension_name || t.dimension || "",
+        child_answer: t.child_answer ?? "—",
+        correct_answer: t.correct_answer ?? "—",
+        is_correct: t.is_correct,
+      })) : [];
+
+      this.setData({
+        result: {
+          dims,
+          summary: teacher.overall_summary || "",
+          suggestions,
+          traces,
+          reportId: res.persisted?.report_id || null,
+        },
+      });
+      wx.showToast({
+        title: res.persisted ? "分析完成，已保存" : "分析完成",
+        icon: "success",
+      });
     } catch (e) {
       this.setData({ error: e.message || "分析失败，请重试" });
     } finally {
       this.setData({ analyzing: false });
+    }
+  },
+
+  previewImg() {
+    if (this.data.src) {
+      wx.previewImage({ urls: [this.data.src] });
+    }
+  },
+
+  viewFullReport() {
+    if (this.data.result && this.data.result.reportId) {
+      wx.navigateTo({ url: "/pages/report/report?id=" + this.data.result.reportId });
+    } else {
+      wx.showToast({ title: "本次分析未持久化，无完整报告", icon: "none" });
     }
   },
 });

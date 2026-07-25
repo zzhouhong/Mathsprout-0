@@ -1,0 +1,53 @@
+<!-- pages/teacher/child-form/child-form.wxml — 添加幼儿 -->
+<view class="container">
+  <view class="header">👶 添加幼儿</view>
+
+  <!-- 成功后展示访问码 -->
+  <view class="success-card" wx:if="{{created}}">
+    <view class="success-icon">✅</view>
+    <view class="success-title">添加成功</view>
+    <view class="success-name">{{created.name}}</view>
+    <view class="code-label">家长访问码（请告知家长）</view>
+    <view class="code-value" bindtap="copyCode">{{created.parent_access_code}} 📋</view>
+    <view class="code-hint">点击访问码可复制</view>
+    <button class="btn-primary" bindtap="backToList">返回班级列表</button>
+  </view>
+
+  <!-- 表单 -->
+  <block wx:else>
+    <view class="field">
+      <text class="label">姓名 *</text>
+      <input class="input" value="{{name}}" bindinput="onNameInput" placeholder="请输入幼儿姓名" />
+    </view>
+
+    <view class="field">
+      <text class="label">年龄段 *</text>
+      <picker bindchange="onAgeChange" value="{{ageIndex}}" range="{{ageLabels}}">
+        <view class="picker-value">{{ageLabels[ageIndex]}}</view>
+      </picker>
+    </view>
+
+    <view class="field">
+      <text class="label">班级</text>
+      <input class="input" value="{{className}}" bindinput="onClassInput" placeholder="如：中一班（选填）" />
+    </view>
+
+    <view class="field">
+      <text class="label">出生日期</text>
+      <picker mode="date" value="{{birthDate}}" end="today" bindchange="onBirthChange">
+        <view class="picker-value">{{birthDate || '请选择（选填）'}}</view>
+      </picker>
+    </view>
+
+    <view class="field">
+      <text class="label">备注</text>
+      <textarea class="textarea" value="{{notes}}" bindinput="onNotesInput" placeholder="特殊情况说明（选填）" />
+    </view>
+
+    <view class="error-text" wx:if="{{error}}">❌ {{error}}</view>
+
+    <button class="btn-primary" bindtap="submit" loading="{{submitting}}" disabled="{{submitting}}">
+      {{submitting ? '提交中...' : '✓ 添加幼儿'}}
+    </button>
+  </block>
+</view>

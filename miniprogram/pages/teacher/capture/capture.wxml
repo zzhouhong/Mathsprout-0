@@ -22,8 +22,9 @@
   </view>
 
   <!-- 预览区 -->
-  <view class="preview" wx:if="{{src}}">
+  <view class="preview" wx:if="{{src}}" bindtap="previewImg">
     <image src="{{src}}" mode="aspectFit" style="width:100%;height:500rpx" />
+    <view class="preview-hint">点击图片可放大预览 🔍</view>
   </view>
   <view class="preview-empty" wx:else>
     <view class="empty-icon">📷</view>
@@ -42,10 +43,39 @@
 
   <!-- 分析结果 -->
   <view class="result" wx:if="{{result}}">
-    <view class="section-title">📊 分析结果</view>
+    <!-- 维度评分 -->
+    <view class="section-title">📊 维度评分</view>
     <view class="score-item" wx:for="{{result.dims}}" wx:key="name">
       <view class="dim-name">{{item.name}}</view>
       <view class="dim-score">{{item.score}}分 {{item.level}}</view>
     </view>
+
+    <!-- 总评 -->
+    <view class="section-title" wx:if="{{result.summary}}">📝 总评</view>
+    <view class="summary-text" wx:if="{{result.summary}}">{{result.summary}}</view>
+
+    <!-- 教学建议 -->
+    <view class="section-title" wx:if="{{result.suggestions.length}}">💡 教学建议</view>
+    <view class="suggestion-card" wx:for="{{result.suggestions}}" wx:key="dimension">
+      <view class="suggestion-dim">{{item.dimension}} <text class="suggestion-level">{{item.level}}</text></view>
+      <view class="suggestion-text" wx:if="{{item.recommendations}}">{{item.recommendations}}</view>
+      <view class="suggestion-act" wx:if="{{item.activities}}">🎯 {{item.activities}}</view>
+    </view>
+
+    <!-- 每题识别明细 -->
+    <view class="section-title" wx:if="{{result.traces.length}}">🔍 每题识别明细</view>
+    <view class="trace-item" wx:for="{{result.traces}}" wx:key="problem">
+      <view class="trace-problem">{{item.problem}}</view>
+      <view class="trace-dim">{{item.dimension}}</view>
+      <view class="trace-answers">
+        幼儿答案：<text class="{{item.is_correct ? 'trace-correct' : 'trace-wrong'}}">{{item.child_answer}}</text>
+        ｜ 标准答案：{{item.correct_answer}}
+      </view>
+    </view>
+
+    <!-- 查看完整报告 -->
+    <button class="btn-outline" wx:if="{{result.reportId}}" bindtap="viewFullReport">
+      📄 查看完整报告
+    </button>
   </view>
 </view>

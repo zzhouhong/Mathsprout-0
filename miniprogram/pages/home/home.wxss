@@ -20,3 +20,8 @@
 .trend-item { display:flex; justify-content:space-between; padding:16rpx 0; border-bottom:1rpx solid #F1F5F9; }
 .trend-dim { font-size:28rpx; color:#475569; }
 .trend-arrow { font-size:32rpx; }
+
+/* 切换/解绑 */
+.switch-row { display:flex; justify-content:center; gap:48rpx; padding:40rpx 0; }
+.switch-link { font-size:26rpx; color:#64748B; }
+.switch-unbind { color:#94A3B8; }

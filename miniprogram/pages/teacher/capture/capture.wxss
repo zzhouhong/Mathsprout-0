@@ -6,6 +6,32 @@
 .result { background:#fff; border-radius:16rpx; padding:32rpx; margin-top:24rpx; }
 .score { font-size:28rpx; color:#475569; padding:12rpx 0; border-bottom:1rpx solid #F1F5F9; }
 
+/* 分析结果各区 */
+.section-title { font-size:30rpx; font-weight:700; color:#1E293B; margin:24rpx 0 16rpx; }
+.section-title:first-child { margin-top:0; }
+.score-item { display:flex; justify-content:space-between; align-items:center; padding:16rpx 0; border-bottom:1rpx solid #F1F5F9; }
+.dim-name { font-size:28rpx; color:#475569; }
+.dim-score { font-size:28rpx; color:#4F46E5; font-weight:600; }
+
+.preview-hint { text-align:center; font-size:22rpx; color:#94A3B8; margin-top:8rpx; }
+
+.summary-text { font-size:26rpx; color:#475569; line-height:1.7; background:#F8FAFC; padding:20rpx; border-radius:12rpx; }
+
+.suggestion-card { background:#F8FAFC; border-radius:12rpx; padding:20rpx; margin-bottom:16rpx; border-left:6rpx solid #4F46E5; }
+.suggestion-dim { font-size:28rpx; font-weight:600; color:#1E293B; margin-bottom:8rpx; }
+.suggestion-level { font-size:24rpx; color:#4F46E5; font-weight:normal; }
+.suggestion-text { font-size:26rpx; color:#475569; line-height:1.6; margin-bottom:8rpx; }
+.suggestion-act { font-size:24rpx; color:#16A34A; }
+
+.trace-item { padding:16rpx 0; border-bottom:1rpx solid #F1F5F9; }
+.trace-problem { font-size:26rpx; color:#1E293B; font-weight:500; }
+.trace-dim { font-size:22rpx; color:#94A3B8; margin:4rpx 0; }
+.trace-answers { font-size:24rpx; color:#64748B; }
+.trace-correct { color:#16A34A; font-weight:600; }
+.trace-wrong { color:#DC2626; font-weight:600; }
+
+.btn-outline { background:#fff; color:#4F46E5; border:2rpx solid #4F46E5; border-radius:16rpx; margin-top:24rpx; }
+
 /* 幼儿与年龄段选择器 */
 .selector-section { background:#fff; border-radius:16rpx; padding:24rpx; margin-bottom:24rpx; }
 .selector-item { display:flex; align-items:center; padding:16rpx 0; border-bottom:1rpx solid #F1F5F9; }
