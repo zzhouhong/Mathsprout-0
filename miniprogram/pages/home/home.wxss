@@ -1,4 +1,4 @@
-﻿.container { padding:40rpx; background:#F8FAFC; min-height:100vh; }
+.container { padding:40rpx; background:#F8FAFC; min-height:100vh; }
 .header { margin-bottom:32rpx; }
 .greeting { font-size:40rpx; font-weight:700; color:#1E293B; }
 .summary-card { background:#fff; border-radius:24rpx; padding:40rpx; margin-bottom:24rpx; box-shadow:0 4rpx 24rpx rgba(0,0,0,0.04); }
