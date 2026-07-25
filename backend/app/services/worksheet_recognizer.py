@@ -1344,12 +1344,26 @@ class WorksheetRecognizer:
                 with open(result_file, "r", encoding="utf-8") as f:
                     return json.load(f)
 
-        raise RuntimeError(
-            f"离线模式：该图片未预存识别结果 (hash={image_hash[:12]}…)。"
-            f"可用 ZCode 视觉能力或 qwen/claude provider 先识别，"
-            f"将结果保存为 recognition_result.json 放入 "
-            f"{results_dir}/<case>/ 下。"
-        )
+        # 未匹配到预存结果：返回友好的空结果（而非抛异常），让前端能正常展示"暂无分析"
+        # 同时在 observations 里附说明，提示该图未被预识别
+        return {
+            "worksheet_type": "unknown",
+            "age_group_hint": age_group or "middle",
+            "problems": [],
+            "observations": {
+                "learning_objective": "离线模式：该图片未预存识别结果",
+                "number_formation_issues": [],
+                "attention_indicators": "skipped",
+                "task_completion_context": "independent",
+                "overall_pck_notes": (
+                    f"离线模式仅能识别预存的测试图片。当前图片（hash={image_hash[:12]}…）"
+                    f"未在离线库中。要识别任意图片，请在 .env 配置 VISION_PROVIDER=qwen 或 claude，"
+                    f"并填入对应 API key。"
+                ),
+            },
+            "dimension_scores_preliminary": {},
+            "_offline_unmatched": True,
+        }
 
     def clear_cache(self) -> int:
         count = len(self._result_cache) + len(self._pass1_cache)
