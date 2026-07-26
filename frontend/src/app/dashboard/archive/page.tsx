@@ -360,7 +360,7 @@ export default function ArchivePage() {
                     </div>
                   </div>
                   <Link
-                    href={`/dashboard/reports/${r.type}/demo`}
+                    href={`/dashboard/reports/${r.type}/demo?id=${r.id}`}
                     className="flex-shrink-0 px-4 py-2 rounded-full text-xs font-bold text-white transition-transform hover:scale-105"
                     style={{ backgroundColor: "var(--kid-blue)" }}
                   >

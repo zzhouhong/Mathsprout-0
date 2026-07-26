@@ -126,7 +126,7 @@ export default function ChildReportsPage() {
                   )}
                 </div>
                 <Link
-                  href={`/dashboard/reports/teacher/demo`}
+                  href={`/dashboard/reports/teacher/demo?id=${r.report_id}`}
                   className="ml-4 px-3 py-1.5 rounded-lg bg-slate-100 text-slate-600 text-xs font-medium hover:bg-slate-200 transition-colors whitespace-nowrap"
                 >
                   查看详情 →

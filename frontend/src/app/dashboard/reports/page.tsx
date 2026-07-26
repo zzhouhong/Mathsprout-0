@@ -137,7 +137,7 @@ export default function ReportsPage() {
                     {r.type === "teacher" ? "教师版" : "家长版"}
                   </Badge>
                   <Link
-                    href={`/dashboard/reports/${r.type}/demo`}
+                    href={`/dashboard/reports/${r.type}/demo?id=${r.report_id}`}
                     className="px-3 py-1.5 rounded-lg bg-slate-100 text-slate-600 text-xs hover:bg-slate-200"
                   >
                     查看 →

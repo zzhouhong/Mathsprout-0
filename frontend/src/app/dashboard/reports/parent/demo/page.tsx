@@ -1,7 +1,8 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { Suspense, useState, useEffect, useCallback } from "react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { ParentReportView } from "@/components/analysis";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -18,6 +19,25 @@ const AGE_GROUPS: Record<AgeGroup, string> = {
 };
 
 export default function ParentReportDemo() {
+  return (
+    <Suspense fallback={<DemoFallback />}>
+      <ParentReportDemoInner />
+    </Suspense>
+  );
+}
+
+function DemoFallback() {
+  return (
+    <div className="flex-1 p-6 max-w-5xl mx-auto">
+      <div className="text-slate-400">加载中...</div>
+    </div>
+  );
+}
+
+function ParentReportDemoInner() {
+  const searchParams = useSearchParams();
+  const realReportId = searchParams?.get("id") ? Number(searchParams.get("id")) : null;
+
   const [report, setReport] = useState<ParentReport | null>(null);
   const [loading, setLoading] = useState(true);
   const [ageGroup, setAgeGroup] = useState<AgeGroup>("middle");
@@ -27,7 +47,10 @@ export default function ParentReportDemo() {
     setLoading(true);
     try {
       const { api } = await import("@/lib/api-client");
-      const data = await api.reports.demoParent(ageGroup, childName);
+      // 优先用 ?id= 取真实报告，否则用 demo 数据
+      const data = realReportId
+        ? await api.reports.getParent(realReportId)
+        : await api.reports.demoParent(ageGroup, childName);
       setReport(data);
     } catch (err) {
       const message = err instanceof Error ? err.message : "加载失败";
@@ -35,7 +58,7 @@ export default function ParentReportDemo() {
     } finally {
       setLoading(false);
     }
-  }, [ageGroup, childName]);
+  }, [ageGroup, childName, realReportId]);
 
   useEffect(() => {
     loadReport();
@@ -51,14 +74,16 @@ export default function ParentReportDemo() {
               教师工作台
             </Link>
             <span>/</span>
-            <span className="text-slate-600">家长报告（演示）</span>
+            <span className="text-slate-600">家长报告{realReportId ? "" : "（演示）"}</span>
           </div>
-          <h1 className="text-2xl font-bold text-slate-800">💚 家长报告（演示）</h1>
+          <h1 className="text-2xl font-bold text-slate-800">💚 家长报告{realReportId ? "" : "（演示）"}</h1>
           <p className="text-sm text-slate-500 mt-1">
             温暖鼓励的家长沟通报告，关注成长过程
           </p>
         </div>
-        <Badge className="bg-amber-100 text-amber-700">演示数据</Badge>
+        {!realReportId && (
+          <Badge className="bg-amber-100 text-amber-700">演示数据</Badge>
+        )}
       </div>
 
       {/* Note for teachers */}

@@ -1,7 +1,8 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { Suspense, useState, useEffect, useCallback } from "react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { TeacherReportView } from "@/components/analysis";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -18,6 +19,25 @@ const AGE_GROUPS: Record<AgeGroup, string> = {
 };
 
 export default function TeacherReportDemo() {
+  return (
+    <Suspense fallback={<DemoFallback />}>
+      <TeacherReportDemoInner />
+    </Suspense>
+  );
+}
+
+function DemoFallback() {
+  return (
+    <div className="flex-1 p-6 max-w-5xl mx-auto">
+      <div className="text-slate-400">加载中...</div>
+    </div>
+  );
+}
+
+function TeacherReportDemoInner() {
+  const searchParams = useSearchParams();
+  const realReportId = searchParams?.get("id") ? Number(searchParams.get("id")) : null;
+
   const [report, setReport] = useState<TeacherReport | null>(null);
   const [loading, setLoading] = useState(true);
   const [ageGroup, setAgeGroup] = useState<AgeGroup>("middle");
@@ -27,7 +47,10 @@ export default function TeacherReportDemo() {
     setLoading(true);
     try {
       const { api } = await import("@/lib/api-client");
-      const data = await api.reports.demoTeacher(ageGroup, childName);
+      // 优先用 ?id= 取真实报告，否则用 demo 数据
+      const data = realReportId
+        ? await api.reports.getTeacher(realReportId)
+        : await api.reports.demoTeacher(ageGroup, childName);
       setReport(data);
     } catch (err) {
       const message = err instanceof Error ? err.message : "加载失败";
@@ -51,9 +74,9 @@ export default function TeacherReportDemo() {
               教师工作台
             </Link>
             <span>/</span>
-            <span className="text-slate-600">教师报告（演示）</span>
+            <span className="text-slate-600">教师报告{realReportId ? "" : "（演示）"}</span>
           </div>
-          <h1 className="text-2xl font-bold text-slate-800">📝 教师报告（演示）</h1>
+          <h1 className="text-2xl font-bold text-slate-800">📝 教师报告{realReportId ? "" : "（演示）"}</h1>
           <p className="text-sm text-slate-500 mt-1">
             基于 PCK 框架的专业教学分析报告
           </p>
