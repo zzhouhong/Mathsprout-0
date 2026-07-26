@@ -13,13 +13,13 @@ from app.models.user import User
 from app.models.child import Child
 from app.models.worksheet import Worksheet, AnalysisResult, ProblemResult
 from app.models.assessment import AbilityAssessment
-from app.models.report import Report, AIRequestLog
+from app.models.report import Report, AIRequestLog, ReportAnnotation
 
 __all__ = [
     "AgeGroupEnum", "UploadMethodEnum", "WorksheetStatusEnum",
     "CompletionContextEnum", "ReportTypeEnum", "LevelEnum",
     "School", "User", "Child",
     "Worksheet", "AnalysisResult", "ProblemResult",
-    "AbilityAssessment", "Report", "AIRequestLog",
+    "AbilityAssessment", "Report", "AIRequestLog", "ReportAnnotation",
 
 ]

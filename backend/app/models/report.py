@@ -35,3 +35,15 @@ class AIRequestLog(Base):
     cost = Column(Float, nullable=True)
     latency_ms = Column(Integer, nullable=True)
     created_at = Column(DateTime, server_default=func.now())
+
+
+class ReportAnnotation(Base):
+    __tablename__ = "report_annotations"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    report_id = Column(Integer, ForeignKey("reports.id", ondelete="CASCADE"), nullable=False, index=True)
+    author_email = Column(String(120), nullable=True)
+    author_name = Column(String(60), nullable=True)
+    text = Column(Text, nullable=False)
+    dimension = Column(String(40), nullable=True)
+    created_at = Column(DateTime, server_default=func.now())
