@@ -1,65 +1,134 @@
-<!-- pages/report/report.wxml — 完整成长报告 -->
+<!-- pages/report/report.wxml — 家长/教师报告详情 -->
 <view class="container">
-  <!-- Loading -->
   <view class="loading" wx:if="{{loading}}">
     <view class="loading-text">加载报告中...</view>
   </view>
 
-  <!-- Error -->
   <view class="error-card" wx:elif="{{error}}">
     <view class="empty-icon">📡</view>
     <view class="empty-text">{{error}}</view>
   </view>
 
-  <!-- Content -->
   <block wx:else>
-    <view class="header">📋 成长报告</view>
+    <view class="header">{{isTeacher ? "📝 教师报告" : "📋 成长报告"}}</view>
     <scroll-view scroll-y class="content">
-      <view class="section" wx:if="{{report.overall_summary}}">
-        <view class="section-title">整体观察</view>
-        <view class="text">{{report.overall_summary}}</view>
-      </view>
-
-      <view class="section" wx:if="{{report.strengths.length}}">
-        <view class="section-title">✨ 优势领域</view>
-        <view class="strength-item" wx:for="{{report.strengths}}" wx:key="area">
-          <view class="s-name">{{item.area}}</view>
-          <view class="s-desc">{{item.description}}</view>
+      <!-- 教师报告 -->
+      <block wx:if="{{isTeacher}}">
+        <view class="section" wx:if="{{report.overall_summary}}">
+          <view class="section-title">整体评估</view>
+          <view class="text">{{report.overall_summary}}</view>
         </view>
-      </view>
 
-      <view class="section" wx:if="{{report.growing_areas.length}}">
-        <view class="section-title">🌱 成长中的领域</view>
-        <view class="grow-item" wx:for="{{report.growing_areas}}" wx:key="area">
-          <view class="s-name">{{item.area}}</view>
-          <view class="s-desc">{{item.description}}</view>
+        <view class="section" wx:if="{{report.coreExperienceSummary}}">
+          <view class="section-title">🎯 核心经验定位</view>
+          <view class="text">{{report.coreExperienceSummary}}</view>
         </view>
-      </view>
 
-      <view class="section" wx:if="{{report.family_activities.length}}">
-        <view class="section-title">🎮 家庭游戏推荐</view>
-        <view class="act-item" wx:for="{{report.family_activities}}" wx:key="title" wx:for-item="act">
-          <view class="act-title">{{act.title}}</view>
-          <view class="act-line" wx:if="{{act.materials}}">🛠 {{act.materials}}</view>
-          <view class="act-line">{{act.steps}}</view>
+        <view class="section" wx:if="{{report.dimensions.length}}">
+          <view class="section-title">📊 四维能力分析</view>
+          <view class="dimension-item" wx:for="{{report.dimensions}}" wx:key="dimension">
+            <view class="dimension-head">
+              <text class="dimension-name">{{item.display_name}}</text>
+              <text class="dimension-level">{{item.level_emoji}} {{item.level_name}} · {{item.score}}%</text>
+            </view>
+            <progress percent="{{item.score}}" activeColor="#4F46E5" stroke-width="8" />
+            <view class="dimension-note" wx:if="{{item.age_benchmark_comparison}}">
+              {{item.age_benchmark_comparison}}
+            </view>
+            <view class="dimension-note recommendation" wx:if="{{item.recommendations}}">
+              建议：{{item.recommendations}}
+            </view>
+          </view>
         </view>
-      </view>
 
-      <view class="section" wx:if="{{report.learning_quality_notes}}">
-        <view class="section-title">💪 学习品质</view>
-        <view class="text">{{report.learning_quality_notes}}</view>
-      </view>
+        <view class="section" wx:if="{{report.pck_analysis}}">
+          <view class="section-title">🧠 PCK 发展分析</view>
+          <view class="text">{{report.pck_analysis}}</view>
+        </view>
 
-      <view class="section tip" wx:if="{{report.parent_tips}}">
-        <view class="section-title">💡 温馨提醒</view>
-        <view class="text">{{report.parent_tips}}</view>
-      </view>
+        <view class="section warning" wx:if="{{report.typical_errors_diagnosis.length}}">
+          <view class="section-title">⚠️ 典型错误诊断</view>
+          <view class="list-item" wx:for="{{report.typical_errors_diagnosis}}" wx:key="*this">
+            • {{item}}
+          </view>
+        </view>
 
-      <!-- Empty -->
-      <view class="empty-state" wx:if="{{!report.overall_summary && !report.strengths.length && !report.growing_areas.length}}">
-        <view class="empty-icon">📋</view>
-        <view class="empty-text">暂无报告数据</view>
-      </view>
+        <view class="section" wx:if="{{report.teachingSuggestions.length}}">
+          <view class="section-title">💡 教学支持建议</view>
+          <view class="suggestion-item" wx:for="{{report.teachingSuggestions}}" wx:key="name">
+            <view class="s-name">{{item.name}} {{item.level}}</view>
+            <view class="s-desc" wx:if="{{item.currentStage}}">当前阶段：{{item.currentStage}}</view>
+            <view class="s-desc" wx:if="{{item.recommendations}}">教学建议：{{item.recommendations}}</view>
+            <view class="s-desc" wx:if="{{item.nextGoal}}">下一目标：{{item.nextGoal}}</view>
+            <view class="s-desc" wx:if="{{item.materials}}">材料建议：{{item.materials}}</view>
+            <view class="activity-list" wx:if="{{item.activities.length}}">
+              <view class="activity-line" wx:for="{{item.activities}}" wx:key="*this" wx:for-item="activity">
+                · {{activity}}
+              </view>
+            </view>
+          </view>
+        </view>
+
+        <view class="section reflection" wx:if="{{report.teaching_reflection_questions.length}}">
+          <view class="section-title">🤔 教学反思</view>
+          <view class="list-item" wx:for="{{report.teaching_reflection_questions}}" wx:key="*this">
+            {{index + 1}}. {{item}}
+          </view>
+        </view>
+
+        <view class="empty-state" wx:if="{{!report.overall_summary && !report.dimensions.length}}">
+          <view class="empty-icon">📋</view>
+          <view class="empty-text">暂无教师报告数据</view>
+        </view>
+      </block>
+
+      <!-- 家长报告 -->
+      <block wx:else>
+        <view class="section" wx:if="{{report.overall_summary}}">
+          <view class="section-title">整体观察</view>
+          <view class="text">{{report.overall_summary}}</view>
+        </view>
+
+        <view class="section" wx:if="{{report.strengths.length}}">
+          <view class="section-title">✨ 优势领域</view>
+          <view class="strength-item" wx:for="{{report.strengths}}" wx:key="area">
+            <view class="s-name">{{item.area}}</view>
+            <view class="s-desc">{{item.description}}</view>
+          </view>
+        </view>
+
+        <view class="section" wx:if="{{report.growing_areas.length}}">
+          <view class="section-title">🌱 成长中的领域</view>
+          <view class="grow-item" wx:for="{{report.growing_areas}}" wx:key="area">
+            <view class="s-name">{{item.area}}</view>
+            <view class="s-desc">{{item.description}}</view>
+          </view>
+        </view>
+
+        <view class="section" wx:if="{{report.family_activities.length}}">
+          <view class="section-title">🎮 家庭游戏推荐</view>
+          <view class="act-item" wx:for="{{report.family_activities}}" wx:key="title" wx:for-item="act">
+            <view class="act-title">{{act.title}}</view>
+            <view class="act-line" wx:if="{{act.materials}}">🛠 {{act.materials}}</view>
+            <view class="act-line">{{act.steps}}</view>
+          </view>
+        </view>
+
+        <view class="section" wx:if="{{report.learning_quality_notes}}">
+          <view class="section-title">💪 学习品质</view>
+          <view class="text">{{report.learning_quality_notes}}</view>
+        </view>
+
+        <view class="section tip" wx:if="{{report.parent_tips}}">
+          <view class="section-title">💡 温馨提醒</view>
+          <view class="text">{{report.parent_tips}}</view>
+        </view>
+
+        <view class="empty-state" wx:if="{{!report.overall_summary && !report.strengths.length && !report.growing_areas.length}}">
+          <view class="empty-icon">📋</view>
+          <view class="empty-text">暂无报告数据</view>
+        </view>
+      </block>
     </scroll-view>
   </block>
 </view>

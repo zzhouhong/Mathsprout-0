@@ -43,7 +43,14 @@
       <view class="empty-hint">对该幼儿拍照分析后，报告将出现在这里</view>
     </view>
 
-    <view class="report-item" wx:for="{{reports}}" wx:key="id" data-id="{{item.id}}" bindtap="goReport">
+    <view
+      class="report-item"
+      wx:for="{{reports}}"
+      wx:key="id"
+      data-id="{{item.id}}"
+      data-type="{{item.reportType}}"
+      bindtap="goReport"
+    >
       <view class="report-header">
         <text class="report-type">{{item.type}}</text>
         <text class="report-date">{{item.date}}</text>

@@ -38,9 +38,12 @@
   <!-- 错误 -->
   <view class="error-text" wx:if="{{error}}">❌ {{error}}</view>
 
-  <!-- 预览（rich-text 渲染后端返回的 HTML） -->
-  <view class="preview" wx:if="{{html}}">
-    <view class="preview-title">📋 操作单预览</view>
-    <rich-text nodes="{{html}}"></rich-text>
+  <!-- 使用原生文本预览，兼容微信小程序渲染环境 -->
+  <view class="preview" wx:if="{{previewText}}">
+    <view class="preview-head">
+      <view class="preview-title">📋 操作单预览</view>
+      <button class="copy-btn" size="mini" bindtap="copyPreview">复制</button>
+    </view>
+    <text class="preview-content" user-select>{{previewText}}</text>
   </view>
 </view>

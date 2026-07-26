@@ -17,7 +17,7 @@ Page({
     selectedDims: ["counting", "shapes_space"],
     dimOptions: DIM_OPTIONS,
     generating: false,
-    html: "",
+    previewText: "",
     error: "",
   },
 
@@ -46,20 +46,38 @@ Page({
   },
 
   async generate() {
-    this.setData({ generating: true, error: "", html: "" });
+    this.setData({ generating: true, error: "", previewText: "" });
     try {
       const res = await api.generateWorksheet({
         age_group: AGE_GROUPS[this.data.ageIndex],
         difficulty: this.data.difficulty,
         dimensions: this.data.selectedDims.join(","),
-        format: "html",
+        format: "markdown",
       });
-      // 后端返回 HTMLResponse，wx.request 已解析为文本
-      this.setData({ html: typeof res === "string" ? res : (res.html || JSON.stringify(res)) });
+      const markdown = res?.markdown || "";
+      const previewText = markdown
+        .replace(/^#{1,6}\s*/gm, "")
+        .replace(/\*\*(.*?)\*\*/g, "$1")
+        .replace(/^>\s?/gm, "")
+        .replace(/^---+$/gm, "")
+        .replace(/\n{3,}/g, "\n\n")
+        .trim();
+      if (!previewText) {
+        throw new Error("操作单内容为空，请重试");
+      }
+      this.setData({ previewText });
     } catch (e) {
       this.setData({ error: e.message || "生成失败，请重试" });
     } finally {
       this.setData({ generating: false });
     }
+  },
+
+  copyPreview() {
+    if (!this.data.previewText) return;
+    wx.setClipboardData({
+      data: this.data.previewText,
+      success: () => wx.showToast({ title: "操作单已复制", icon: "success" }),
+    });
   },
 });

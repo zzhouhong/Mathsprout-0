@@ -50,6 +50,7 @@ Page({
           },
           reports: (reportsData?.reports || []).map((r) => ({
             id: r.report_id,
+            reportType: r.type === "teacher" ? "teacher" : "parent",
             type: r.type === "teacher" ? "👩‍🏫 教师报告" : "👨‍👩‍👧 家长报告",
             date: r.generated_at ? r.generated_at.substring(0, 10) : "",
             summary: (r.summary || "").substring(0, 60),
@@ -73,9 +74,11 @@ Page({
 
   goReport(e) {
     const id = e.currentTarget.dataset.id;
+    const type = e.currentTarget.dataset.type || "parent";
     if (id) {
-      // 教师版报告走 teacher 接口（家长端 report 页也可复用展示）
-      wx.navigateTo({ url: "/pages/report/report?id=" + id });
+      wx.navigateTo({
+        url: "/pages/report/report?id=" + id + "&type=" + type,
+      });
     }
   },
 

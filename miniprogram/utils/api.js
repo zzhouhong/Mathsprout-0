@@ -35,7 +35,11 @@ function request(path, options = {}) {
   // 自动注入认证 token
   const headers = { "Content-Type": "application/json", ...header };
   if (auth) {
-    const token = app.globalData.token || wx.getStorageSync("token") || "";
+    const token =
+      app.globalData.token ||
+      wx.getStorageSync("teacher_token") ||
+      wx.getStorageSync("token") ||
+      "";
     if (token) {
       headers["Authorization"] = "Bearer " + token;
     }
