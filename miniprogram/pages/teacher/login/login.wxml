@@ -1,4 +1,4 @@
-﻿<!-- pages/teacher/login/login.wxml -->
+<!-- pages/teacher/login/login.wxml -->
 <view class="container">
   <view class="card">
     <view class="title">🔐 教师登录</view>
