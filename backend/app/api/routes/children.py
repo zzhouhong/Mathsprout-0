@@ -87,6 +87,35 @@ async def create_child(
     )
 
 
+@router.get("/class-summary")
+async def get_class_summary(
+    db: AsyncSession = Depends(get_db),
+    current_user: dict = Depends(get_current_teacher),
+):
+    """
+    Get per-class child counts and age distribution.
+    Requires teacher authentication.
+    """
+    result = await db.execute(select(Child).order_by(Child.class_name, Child.age_group))
+    children = result.scalars().all()
+
+    classes: dict = {}
+    for c in children:
+        cn = c.class_name or "未分班"
+        if cn not in classes:
+            classes[cn] = {"class_name": cn, "total": 0, "age_groups": {"small": 0, "middle": 0, "large": 0}}
+        classes[cn]["total"] += 1
+        ag = c.age_group.value if hasattr(c.age_group, 'value') else str(c.age_group)
+        if ag in classes[cn]["age_groups"]:
+            classes[cn]["age_groups"][ag] += 1
+
+    return {
+        "total_classes": len(classes),
+        "total_children": len(children),
+        "classes": sorted(classes.values(), key=lambda x: x["class_name"]),
+    }
+
+
 @router.get("/{child_id}")
 async def get_child(
     child_id: int,
@@ -307,31 +336,3 @@ async def import_children(
 
 
 # ─── Class Summary ────────────────────────────────────────────────────
-
-@router.get("/class-summary")
-async def get_class_summary(
-    db: AsyncSession = Depends(get_db),
-    current_user: dict = Depends(get_current_teacher),
-):
-    """
-    Get per-class child counts and age distribution.
-    Requires teacher authentication.
-    """
-    result = await db.execute(select(Child).order_by(Child.class_name, Child.age_group))
-    children = result.scalars().all()
-
-    classes: dict = {}
-    for c in children:
-        cn = c.class_name or "未分班"
-        if cn not in classes:
-            classes[cn] = {"class_name": cn, "total": 0, "age_groups": {"small": 0, "middle": 0, "large": 0}}
-        classes[cn]["total"] += 1
-        ag = c.age_group.value if hasattr(c.age_group, 'value') else str(c.age_group)
-        if ag in classes[cn]["age_groups"]:
-            classes[cn]["age_groups"][ag] += 1
-
-    return {
-        "total_classes": len(classes),
-        "total_children": len(children),
-        "classes": sorted(classes.values(), key=lambda x: x["class_name"]),
-    }

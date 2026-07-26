@@ -191,7 +191,16 @@ async def import_children_from_csv(
 
         # Build child
         access_code = secrets.token_hex(4).upper()
-        birth_date = row.get("birth_date") or None
+        # birth_date 需转 datetime 对象（SQLAlchemy SQLite DateTime 不接受字符串）
+        raw_birth = row.get("birth_date") or None
+        birth_date = None
+        if raw_birth:
+            try:
+                from datetime import datetime as _dt
+                birth_date = _dt.strptime(raw_birth, "%Y-%m-%d")
+            except ValueError:
+                # 解析失败的日期跳过（保留其他字段继续导入）
+                birth_date = None
         notes = row.get("notes") or None
         class_name = row.get("class_name") or None
 
@@ -199,7 +208,7 @@ async def import_children_from_csv(
             name=name,
             age_group=age_group,
             class_name=class_name,
-            birth_date=birth_date if birth_date else None,
+            birth_date=birth_date,
             parent_access_code=access_code,
             notes=notes,
         )
