@@ -928,6 +928,20 @@ export const api = {
   // ── Parent (家长端专用接口) ─────────────────────────────────────
 
   parent: {
+    /** 用访问码绑定家长到幼儿，返回 child_id 与 access_token */
+    async bind(accessCode: string) {
+      return request<{
+        child_id: number;
+        child_name: string;
+        age_group: string;
+        class_name: string;
+        token: string;
+      }>("/api/v1/parent/bind", {
+        method: "POST",
+        body: JSON.stringify({ access_code: accessCode }),
+      });
+    },
+
     /** 取绑定幼儿的最新家长报告（精简结构）。无报告时 has_report=false。 */
     async latestReport(childId: number) {
       const params = new URLSearchParams({ child_id: String(childId) });

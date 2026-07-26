@@ -16,6 +16,18 @@ function isWeChat(): boolean {
 
 type Screen = "login" | "loading" | "report";
 
+/** 从 localStorage 读之前的绑定信息（避免重启/刷新后要求重新输码） */
+function readStoredBind() {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = window.localStorage.getItem("parent_bind");
+    if (!raw) return null;
+    return JSON.parse(raw);
+  } catch {
+    return null;
+  }
+}
+
 export default function ParentPage() {
   const [accessCode, setAccessCode] = useState("");
   const [screen, setScreen] = useState<Screen>("login");
@@ -23,6 +35,64 @@ export default function ParentPage() {
   const [childName, setChildName] = useState("");
   const [error, setError] = useState("");
   const [noReport, setNoReport] = useState(false);
+
+  // Cold start 自动恢复绑定：直接从 localStorage 拿 childId，跳过输码
+  useEffect(() => {
+    const stored = readStoredBind();
+    if (stored && stored.child_id) {
+      void loadLatestReport(stored.child_id, stored.child_name || "宝宝");
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  /** 根据 childId 加载最新报告（供初次绑定和 cold start 共用） */
+  const loadLatestReport = async (childId: number, name: string) => {
+    setScreen("loading");
+    setChildName(name);
+    setError("");
+    try {
+      const { api } = await import("@/lib/api-client");
+      const latest = await api.parent.latestReport(childId);
+      if (latest.has_report) {
+        // 适配 latest-report 的精简结构 → ParentReport 的展示结构
+        // strengths/growing_areas 已是对象数组；family_activities 是字符串数组
+        const adaptItem = (it: { area?: string; emoji?: string; description?: string; parent_observation_tip?: string }) => ({
+          area: it.area || "",
+          emoji: it.emoji || "⭐",
+          description: it.description || "",
+          parent_observation_tip: it.parent_observation_tip || "",
+        });
+        setReport({
+          child_name: name,
+          age_group: latest.age_group || "middle",
+          generated_at: latest.generated_at || "",
+          report_type: "parent",
+          overall_summary: latest.overall_summary || "",
+          strengths: (latest.strengths || []).map(adaptItem),
+          growing_areas: (latest.growing_areas || []).map(adaptItem),
+          family_activities: (latest.family_activities || []).map((it) => ({
+            title: it.title || "",
+            materials: it.materials || "",
+            steps: it.steps || "",
+            math_concept: it.why || "",
+          })),
+          learning_quality_notes: latest.learning_quality_notes || "",
+          parent_tips: latest.parent_tips || "",
+        } as unknown as ParentReport);
+        setScreen("report");
+      } else {
+        setScreen("login");
+        setNoReport(true);
+        toast.info(latest.message || "该幼儿暂无分析报告，请联系老师生成");
+      }
+    } catch (err) {
+      // 加载失败（storage 失效、网络问题等）—— 退到登录页
+      const message = err instanceof Error ? err.message : "加载失败";
+      toast.error(message);
+      setScreen("login");
+      setError(message);
+    }
+  };
 
   const handleAccess = async () => {
     const code = accessCode.trim();
@@ -35,61 +105,29 @@ export default function ParentPage() {
     setError("");
 
     try {
+      // 用 api-client 统一发请求（走 next.config 的 rewrite 到后端，base URL 正确）
       const { api } = await import("@/lib/api-client");
-
-      // Step 1: 用访问码绑定幼儿，拿到 child_id 与姓名
-      const bindRes = await fetch(`${process.env.NEXT_PUBLIC_API_URL || ""}/api/v1/parent/bind`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ access_code: code }),
-      });
-      if (!bindRes.ok) {
-        const err = await bindRes.json().catch(() => ({}));
-        throw new Error(err.detail || "访问码无效，请检查后重试");
-      }
-      const bindData = await bindRes.json();
+      const bindData = await api.parent.bind(code);
       const childId = bindData.child_id as number;
       const name = (bindData.child_name as string) || "宝宝";
 
-      // Step 2: 取该幼儿的真实最新家长报告
-      const latest = await api.parent.latestReport(childId);
-
-      if (latest.has_report) {
-        // 有真实报告 —— 将 latest-report 的精简结构适配为 ParentReport 展示结构
-        const toItems = (arr?: string[]) =>
-          (arr || []).map((text) => ({
-            area: text,
-            emoji: "⭐",
-            description: text,
-            parent_observation_tip: "",
-          }));
-        setReport({
-          child_name: name,
-          age_group: bindData.age_group || "middle",
-          generated_at: latest.generated_at || "",
-          report_type: "parent",
-          overall_summary: latest.overall_summary || "",
-          strengths: toItems(latest.strengths),
-          growing_areas: toItems(latest.growing_areas),
-          family_activities: (latest.family_activities || []).map((t) => ({
-            title: t,
-            materials: "",
-            steps: t,
-            math_concept: "",
-          })),
-          learning_quality_notes: latest.learning_quality_notes || "",
-          parent_tips: latest.parent_tips || "",
-        } as unknown as ParentReport);
-        setChildName(name);
-        setScreen("report");
-        toast.success("验证成功！欢迎查看宝宝的学习观察记录 🌈");
-      } else {
-        // 暂无报告 —— 友好提示，引导联系老师
-        setChildName(name);
-        setNoReport(true);
-        setScreen("login");
-        toast.info(latest.message || "该幼儿暂无分析报告，请联系老师生成");
+      // 持久化绑定信息（cold start 自动恢复用）
+      try {
+        window.localStorage.setItem(
+          "parent_bind",
+          JSON.stringify({
+            child_id: childId,
+            child_name: name,
+            age_group: bindData.age_group,
+            bound_at: Date.now(),
+          })
+        );
+      } catch {
+        // storage 可能被禁用，不阻断主流程
       }
+
+      // 复用 loadLatestReport（带绑定信息）
+      await loadLatestReport(childId, name);
     } catch (err) {
       const message = err instanceof Error ? err.message : "访问码无效";
       setError(message);
@@ -208,7 +246,11 @@ export default function ParentPage() {
               <p className="text-xs text-slate-400 hidden sm:block">基于数学操作单分析生成</p>
             </div>
             <button
-              onClick={() => { setScreen("login"); setReport(null); }}
+              onClick={() => {
+                setScreen("login");
+                setReport(null);
+                try { window.localStorage.removeItem("parent_bind"); } catch {}
+              }}
               className="text-sm text-slate-400 hover:text-slate-600 active:text-slate-800 py-2 px-1"
               style={{ minHeight: "44px", minWidth: "44px" }}
             >
