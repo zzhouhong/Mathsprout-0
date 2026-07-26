@@ -1,6 +1,42 @@
-﻿.container { padding:40rpx; }
-.header { font-size:36rpx; font-weight:700; }
-.meta { font-size:24rpx; color:#94A3B8; margin:8rpx 0 24rpx; }
-.report { background:#fff; border-radius:16rpx; padding:32rpx; }
-.text { font-size:28rpx; color:#475569; line-height:1.7; }
-.empty { text-align:center; padding:100rpx 0; color:#94A3B8; }
+.container { padding:40rpx; }
+
+/* 信息卡 */
+.info-card { background:#fff; border-radius:20rpx; padding:32rpx; margin-bottom:32rpx; }
+.header { font-size:36rpx; font-weight:700; color:#1E293B; }
+.meta-row { font-size:26rpx; color:#64748B; margin-top:12rpx; }
+.meta-row.notes { color:#94A3B8; font-size:24rpx; }
+
+.access-code-box {
+  margin-top:24rpx; padding:20rpx; background:#F1F5F9; border-radius:12rpx;
+}
+.code-label { font-size:22rpx; color:#64748B; margin-bottom:8rpx; }
+.code-value { font-size:40rpx; font-weight:700; color:#4F46E5; letter-spacing:6rpx; }
+
+.action-row { display:flex; gap:16rpx; margin-top:24rpx; }
+.action-row button { flex:1; font-size:26rpx; border-radius:12rpx; }
+.btn-edit { background:#F1F5F9; color:#4F46E5; }
+.btn-delete { background:#FEF2F2; color:#DC2626; }
+
+/* 报告列表 */
+.section-title { font-size:30rpx; font-weight:700; color:#1E293B; margin-bottom:16rpx; }
+.empty-state { text-align:center; padding:80rpx 0; }
+.empty-icon { font-size:60rpx; }
+.empty-title { font-size:28rpx; color:#64748B; margin-top:12rpx; }
+.empty-hint { font-size:24rpx; color:#CBD5E1; margin-top:8rpx; }
+
+.report-item {
+  background:#fff; border-radius:16rpx; padding:24rpx; margin-bottom:16rpx;
+  position:relative;
+}
+.report-header { display:flex; justify-content:space-between; align-items:center; }
+.report-type { font-size:28rpx; font-weight:600; color:#1E293B; }
+.report-date { font-size:22rpx; color:#94A3B8; }
+.report-summary { font-size:26rpx; color:#64748B; margin-top:12rpx; line-height:1.5; }
+.report-arrow { position:absolute; right:24rpx; top:50%; transform:translateY(-50%); color:#CBD5E1; }
+
+/* loading/error */
+.loading { text-align:center; padding:100rpx 0; }
+.loading-text { color:#94A3B8; }
+.error-card { text-align:center; padding:80rpx 0; }
+.empty-icon { font-size:60rpx; }
+.empty-text { color:#94A3B8; margin-top:12rpx; }

@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
+import { toast } from "sonner";
 import { api, type ChildRecord } from "@/lib/api-client";
 import { Card } from "@/components/ui/card";
 import { MascotCharacter, MascotBubble } from "@/components/kid";
@@ -77,7 +78,7 @@ export default function ArchivePage() {
   useEffect(() => {
     api.children.list()
       .then((d) => setChildren(d.children))
-      .catch(() => {})
+      .catch(() => toast.error("加载幼儿列表失败，请检查网络后刷新"))
       .finally(() => setLoading(false));
   }, []);
 
@@ -110,7 +111,7 @@ export default function ArchivePage() {
         allReports.sort((a, b) => b.generated_at.localeCompare(a.generated_at));
         setReports(allReports);
       })
-      .catch(() => {})
+      .catch(() => toast.error("加载报告档案失败，请稍后重试"))
       .finally(() => setReportsLoading(false));
   }, [activeTab, children, reports.length]);
 
@@ -146,7 +147,7 @@ export default function ArchivePage() {
       .then((results) => {
         setTrajectories(results.filter((t) => t.assessment_count > 0));
       })
-      .catch(() => {})
+      .catch(() => toast.error("加载成长轨迹失败，请稍后重试"))
       .finally(() => setTrackingLoading(false));
   }, [activeTab, children, trajectories.length]);
 
@@ -156,7 +157,7 @@ export default function ArchivePage() {
     setClassLoading(true);
     api.children.classSummary()
       .then((d) => setClassSummary(d))
-      .catch(() => {})
+      .catch(() => toast.error("加载班级分析失败，请稍后重试"))
       .finally(() => setClassLoading(false));
   }, [activeTab, classSummary]);
 
@@ -359,7 +360,7 @@ export default function ArchivePage() {
                     </div>
                   </div>
                   <Link
-                    href={`/dashboard/reports/${r.type}/demo`}
+                    href={`/dashboard/reports/${r.type}/demo?id=${r.id}`}
                     className="flex-shrink-0 px-4 py-2 rounded-full text-xs font-bold text-white transition-transform hover:scale-105"
                     style={{ backgroundColor: "var(--kid-blue)" }}
                   >

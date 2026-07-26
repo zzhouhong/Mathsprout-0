@@ -17,14 +17,9 @@ from app.core.prompts.pck_reference import (
     get_dimension_display_name,
 )
 from app.core.security import get_current_teacher, get_current_user
-from app.models import Report
+from app.models import Report, ReportAnnotation
 
 router = APIRouter()
-
-# ─── In-memory annotation store (annotations remain lightweight) ─────
-
-_annotations_store: dict = {}  # {report_id: [{id, author, text, created_at}]}
-_next_annotation_id: int = 1
 
 
 async def _save_report_to_db(
@@ -235,7 +230,10 @@ async def add_annotation(
     db: AsyncSession = Depends(get_db),
     current_user: dict = Depends(get_current_teacher),
 ):
-    """Add a teaching annotation to a report. Shared among teachers."""
+    """Add a teaching annotation to a report. Shared among teachers.
+
+    存储到 report_annotations 表（DB），重启后端不会丢失。
+    """
     # Verify report exists in DB
     await _get_report_from_db(db, report_id)
 
@@ -245,21 +243,28 @@ async def add_annotation(
     if len(text) > 500:
         raise HTTPException(status_code=400, detail="批注内容不超过500字")
 
-    global _next_annotation_id
-    annotation = {
-        "id": _next_annotation_id,
-        "report_id": report_id,
-        "author": current_user.get("name") or current_user.get("email", "教师"),
-        "text": text,
-        "created_at": datetime.now().isoformat(),
-    }
-    _next_annotation_id += 1
+    annotation = ReportAnnotation(
+        report_id=report_id,
+        author_email=current_user.get("email"),
+        author_name=current_user.get("name") or current_user.get("email", "教师"),
+        text=text,
+        dimension=body.get("dimension"),
+    )
+    db.add(annotation)
+    await db.commit()
+    await db.refresh(annotation)
 
-    if report_id not in _annotations_store:
-        _annotations_store[report_id] = []
-    _annotations_store[report_id].append(annotation)
-
-    return JSONResponse(content=annotation, status_code=201)
+    return JSONResponse(
+        content={
+            "id": annotation.id,
+            "report_id": annotation.report_id,
+            "author": annotation.author_name,
+            "text": annotation.text,
+            "dimension": annotation.dimension,
+            "created_at": annotation.created_at.isoformat() if annotation.created_at else None,
+        },
+        status_code=201,
+    )
 
 
 @router.get("/{report_id}/annotations")
@@ -271,13 +276,29 @@ async def list_annotations(
     """List all annotations for a report. Requires authentication."""
     await _get_report_from_db(db, report_id)
 
-    annotations = _annotations_store.get(report_id, [])
-    annotations.sort(key=lambda a: a["created_at"], reverse=True)
-    return JSONResponse(content={
-        "report_id": report_id,
-        "count": len(annotations),
-        "annotations": annotations,
-    })
+    result = await db.execute(
+        select(ReportAnnotation)
+        .where(ReportAnnotation.report_id == report_id)
+        .order_by(ReportAnnotation.created_at.desc())
+    )
+    annotations = result.scalars().all()
+    return JSONResponse(
+        content={
+            "report_id": report_id,
+            "count": len(annotations),
+            "annotations": [
+                {
+                    "id": a.id,
+                    "report_id": a.report_id,
+                    "author": a.author_name,
+                    "text": a.text,
+                    "dimension": a.dimension,
+                    "created_at": a.created_at.isoformat() if a.created_at else None,
+                }
+                for a in annotations
+            ],
+        }
+    )
 
 
 @router.delete("/{report_id}/annotations/{annotation_id}")
@@ -285,17 +306,21 @@ async def delete_annotation(
     report_id: int,
     annotation_id: int,
     db: AsyncSession = Depends(get_db),
-    current_user: dict = Depends(get_current_teacher),
+    current_user: dict = Depends(get_current_user),
 ):
-    """Delete an annotation. Only teachers can delete."""
-    await _get_report_from_db(db, report_id)
-
-    annotations = _annotations_store.get(report_id, [])
-    for i, a in enumerate(annotations):
-        if a["id"] == annotation_id:
-            annotations.pop(i)
-            return JSONResponse(content={"deleted": True})
-    raise HTTPException(status_code=404, detail="批注不存在")
+    """Delete an annotation. Only authenticated users can delete."""
+    result = await db.execute(
+        select(ReportAnnotation).where(
+            ReportAnnotation.id == annotation_id,
+            ReportAnnotation.report_id == report_id,
+        )
+    )
+    annotation = result.scalar_one_or_none()
+    if not annotation:
+        raise HTTPException(status_code=404, detail="批注不存在")
+    await db.delete(annotation)
+    await db.commit()
+    return JSONResponse(content={"deleted": True})
 
 
 # ─── Demo Reports ────────────────────────────────────────────────────

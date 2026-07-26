@@ -84,7 +84,7 @@ export default function ChildReportsPage() {
           )}
         </div>
         <Link
-          href={`/dashboard/analyze?child=${encodeURIComponent(child?.name || "")}&age=${child?.age_group || "middle"}`}
+          href={`/dashboard/assessment?child=${encodeURIComponent(child?.name || "")}&age=${child?.age_group || "middle"}`}
           className="px-4 py-2 rounded-xl bg-indigo-600 text-white text-sm font-medium hover:bg-indigo-700 transition-colors"
         >
           📸 新分析
@@ -126,7 +126,7 @@ export default function ChildReportsPage() {
                   )}
                 </div>
                 <Link
-                  href={`/dashboard/reports/teacher/demo`}
+                  href={`/dashboard/reports/teacher/demo?id=${r.report_id}`}
                   className="ml-4 px-3 py-1.5 rounded-lg bg-slate-100 text-slate-600 text-xs font-medium hover:bg-slate-200 transition-colors whitespace-nowrap"
                 >
                   查看详情 →

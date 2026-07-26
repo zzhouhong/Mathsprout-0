@@ -11,6 +11,14 @@ Page({
   },
 
   onShow() {
+    // 优先从 storage 恢复绑定信息（冷启动后 globalData 会丢失）
+    const stored = wx.getStorageSync("bindInfo");
+    if (stored && stored.childId) {
+      app.globalData.childId = stored.childId;
+      app.globalData.childName = stored.childName;
+      app.globalData.token = stored.token;
+    }
+
     const childId = app.globalData.childId;
     if (!childId) {
       wx.redirectTo({ url: "/pages/index/index" });
@@ -46,5 +54,31 @@ Page({
 
   goReport() {
     wx.navigateTo({ url: "/pages/report/report" });
+  },
+
+  onUnbind() {
+    wx.showModal({
+      title: "解除绑定",
+      content: "将清除当前幼儿的绑定信息，需要重新输入访问码",
+      confirmText: "解除",
+      confirmColor: "#DC2626",
+      success: (res) => {
+        if (res.confirm) {
+          wx.removeStorageSync("bindInfo");
+          wx.removeStorageSync("token");
+          app.globalData.childId = null;
+          app.globalData.childName = "";
+          app.globalData.token = "";
+          wx.reLaunch({ url: "/pages/index/index" });
+        }
+      },
+    });
+  },
+
+  onShareAppMessage() {
+    return {
+      title: this.data.childName ? this.data.childName + "的成长档案 🌱" : "萌芽数学 · 成长档案",
+      path: "/pages/index/index",
+    };
   },
 });

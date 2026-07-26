@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
+import { useSearchParams } from "next/navigation";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
@@ -74,6 +75,7 @@ const DIM_COLORS: Record<string, string> = {
 };
 
 export default function TrackingPage() {
+  const searchParams = useSearchParams();
   const [children, setChildren] = useState<ChildRecord[]>([]);
   const [selectedChild, setSelectedChild] = useState<ChildRecord | null>(null);
   const [growthData, setGrowthData] = useState<GrowthData | null>(null);
@@ -84,13 +86,20 @@ export default function TrackingPage() {
       const { api } = await import("@/lib/api-client");
       const data = await api.children.list();
       setChildren(data.children || []);
-      if (data.children?.length > 0 && !selectedChild) {
-        setSelectedChild(data.children[0]);
+      if (data.children?.length > 0) {
+        // 优先按 URL 的 ?child= id 预选（从成长档案等页面跳转时携带）
+        const paramId = searchParams.get("child");
+        const matched = paramId
+          ? data.children.find((c) => String(c.id) === paramId)
+          : null;
+        if (!selectedChild) {
+          setSelectedChild(matched || data.children[0]);
+        }
       }
     } catch {
       toast.error("加载幼儿列表失败");
     }
-  }, [selectedChild]);
+  }, [selectedChild, searchParams]);
 
   const fetchGrowth = useCallback(async (child: ChildRecord) => {
     setLoading(true);

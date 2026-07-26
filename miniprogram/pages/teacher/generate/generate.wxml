@@ -1,0 +1,49 @@
+<!-- pages/teacher/generate/generate.wxml — 教师生成操作单 -->
+<view class="container">
+  <view class="header">📚 生成操作单</view>
+
+  <!-- 年龄段 -->
+  <view class="field">
+    <text class="label">年龄段</text>
+    <picker bindchange="onAgeChange" value="{{ageIndex}}" range="{{ageLabels}}">
+      <view class="picker-value">{{ageLabels[ageIndex]}}</view>
+    </picker>
+  </view>
+
+  <!-- 难度 -->
+  <view class="field">
+    <text class="label">难度</text>
+    <slider min="1" max="5" step="1" value="{{difficulty}}" show-value bindchange="onDifficultyChange" activeColor="#4F46E5" />
+  </view>
+
+  <!-- 维度选择 -->
+  <view class="field">
+    <text class="label">练习维度</text>
+    <view class="dim-grid">
+      <view
+        class="dim-chip {{selectedDims.indexOf(item.key) >= 0 ? 'dim-chip-active' : ''}}"
+        wx:for="{{dimOptions}}"
+        wx:key="key"
+        data-dim="{{item.key}}"
+        bindtap="onDimToggle"
+      >{{item.label}}</view>
+    </view>
+  </view>
+
+  <!-- 生成按钮 -->
+  <button class="btn-primary" bindtap="generate" loading="{{generating}}" disabled="{{generating}}">
+    {{generating ? '生成中...' : '✨ 生成操作单'}}
+  </button>
+
+  <!-- 错误 -->
+  <view class="error-text" wx:if="{{error}}">❌ {{error}}</view>
+
+  <!-- 使用原生文本预览，兼容微信小程序渲染环境 -->
+  <view class="preview" wx:if="{{previewText}}">
+    <view class="preview-head">
+      <view class="preview-title">📋 操作单预览</view>
+      <button class="copy-btn" size="mini" bindtap="copyPreview">复制</button>
+    </view>
+    <text class="preview-content" user-select>{{previewText}}</text>
+  </view>
+</view>

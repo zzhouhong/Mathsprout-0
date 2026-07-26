@@ -24,7 +24,12 @@ from openai import OpenAI
 PDF_PATH = r"C:\Users\Zred\Desktop\（已压缩）学前儿童数学学习与发展核心经验.pdf"
 OUTPUT_MD = Path(r"C:\Users\Zred\Desktop\first CC\backend\app\core\prompts\pck_textbook_extracted.md")
 
-API_KEY = "sk-ws-H.RPEMHHY.eQgm.MEQCIH29VHN2uBAifONMEFU5KC1bj3XkqwOkFSkDz6Ul07q5AiAjohBjra7I1z0qusogmX0oseGQvztiOdTN475GlM0Lqg"
+# ⚠️ 安全：API Key 必须从环境变量读取，切勿硬编码。
+#    此前硬编码的真实 key 已从代码中移除，请确保在阿里云控制台吊销旧 key。
+import os
+API_KEY = os.environ.get("DASHSCOPE_API_KEY") or os.environ.get("VISION_API_KEY", "")
+if not API_KEY:
+    raise SystemExit("请在环境变量中设置 DASHSCOPE_API_KEY 或 VISION_API_KEY 后再运行此脚本。")
 BASE_URL = "https://dashscope.aliyuncs.com/compatible-mode/v1"
 MODEL = "qwen-vl-max"
 

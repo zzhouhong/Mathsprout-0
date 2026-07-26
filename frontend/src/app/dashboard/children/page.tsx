@@ -391,7 +391,7 @@ export default function ChildrenPage() {
                   </div>
                   <div className="flex items-center gap-2">
                     <Link
-                      href={`/dashboard/analyze?child=${encodeURIComponent(child.name)}&age=${child.age_group}`}
+                      href={`/dashboard/assessment?child=${encodeURIComponent(child.name)}&age=${child.age_group}`}
                       className="px-3 py-1.5 rounded-lg bg-indigo-100 text-indigo-700 text-xs font-medium hover:bg-indigo-200 transition-colors"
                     >
                       📸 分析操作单

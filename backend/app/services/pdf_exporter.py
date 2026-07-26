@@ -97,8 +97,9 @@ class ProgressBar(Flowable):
 
         # Filled bar
         fill_w = self._width * (self.score / 100.0)
+        # 先无条件初始化 color（避免低分时 fill_w<=0 导致下面 setFillColor(color) UnboundLocalError）
+        color = LEVEL_COLORS.get(self.level, BRAND_PRIMARY)
         if fill_w > 1 * mm:
-            color = LEVEL_COLORS.get(self.level, BRAND_PRIMARY)
             c.setFillColor(color)
             c.roundRect(0, bar_y, fill_w, bar_h, 1.5 * mm, fill=1, stroke=0)
 

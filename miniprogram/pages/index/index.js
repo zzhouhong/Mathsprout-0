@@ -19,9 +19,18 @@ Page({
 
     try {
       const result = await api.bind(code);
-      app.globalData.childId = result.child_id;
-      app.globalData.childName = result.child_name;
-      app.globalData.token = result.token;
+      // 完整持久化绑定信息到 storage（避免重启后需要重新输码）
+      const bindInfo = {
+        childId: result.child_id,
+        childName: result.child_name,
+        ageGroup: result.age_group || "middle",
+        className: result.class_name || "",
+        token: result.token,
+      };
+      app.globalData.childId = bindInfo.childId;
+      app.globalData.childName = bindInfo.childName;
+      app.globalData.token = bindInfo.token;
+      wx.setStorageSync("bindInfo", bindInfo);
       wx.setStorageSync("token", result.token);
       wx.switchTab({ url: "/pages/home/home" });
     } catch (err) {

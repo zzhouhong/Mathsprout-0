@@ -35,7 +35,11 @@ function request(path, options = {}) {
   // 自动注入认证 token
   const headers = { "Content-Type": "application/json", ...header };
   if (auth) {
-    const token = app.globalData.token || wx.getStorageSync("token") || "";
+    const token =
+      app.globalData.token ||
+      wx.getStorageSync("teacher_token") ||
+      wx.getStorageSync("token") ||
+      "";
     if (token) {
       headers["Authorization"] = "Bearer " + token;
     }
@@ -146,8 +150,17 @@ module.exports = {
   getChildren: () =>
     request("/children", { auth: true }),
 
+  createChild: (data) =>
+    request("/children", { method: "POST", auth: true, data }),
+
   getChildDetail: (childId) =>
     request("/children/" + childId, { auth: true }),
+
+  updateChild: (childId, data) =>
+    request("/children/" + childId, { method: "PUT", auth: true, data }),
+
+  deleteChild: (childId) =>
+    request("/children/" + childId, { method: "DELETE", auth: true }),
 
   getChildReports: (childId) =>
     request("/reports/history/" + childId, { auth: true, showLoading: true }),
@@ -157,4 +170,13 @@ module.exports = {
 
   uploadAndAnalyze: (filePath, formData) =>
     uploadFile("/worksheets/demo", filePath, formData),
+
+  // ─── 工作单生成 ───────────────────────────────
+  generateWorksheet: (params) => {
+    const qs = Object.keys(params)
+      .filter((k) => params[k] !== undefined && params[k] !== null && params[k] !== "")
+      .map((k) => encodeURIComponent(k) + "=" + encodeURIComponent(params[k]))
+      .join("&");
+    return request("/worksheets/generate?" + qs, { auth: true, showLoading: true });
+  },
 };

@@ -16,6 +16,7 @@ import io
 import cv2
 import numpy as np
 from typing import Optional, Dict, Any, Union, List, Tuple
+from pathlib import Path
 from openai import (
     AsyncOpenAI,
     APIStatusError as OpenAIStatusError,
@@ -57,9 +58,26 @@ ANTHROPIC_RETRYABLE = (
 
 # ─── Provider detection ──────────────────────────────────────────────
 
-def _is_anthropic_provider() -> bool:
+def _detect_provider() -> str:
+    """Detect the vision provider.
+
+    Priority:
+      1. Explicit VISION_PROVIDER setting (e.g. "offline")
+      2. Auto-detect from VISION_BASE_URL ("anthropic.com"/"claude" → anthropic)
+      3. Fallback to OpenAI-compatible
+    """
+    explicit = (settings.VISION_PROVIDER or "").strip().lower()
+    if explicit:
+        return explicit
     base = (settings.VISION_BASE_URL or "").lower()
-    return "anthropic.com" in base or "claude" in base
+    if "anthropic.com" in base or "claude" in base:
+        return "anthropic"
+    return "openai_compatible"
+
+
+def _is_anthropic_provider() -> bool:
+    """Backward-compatible shim. Prefer _detect_provider()."""
+    return _detect_provider() == "anthropic"
 
 
 # ─── Prompt cache ─────────────────────────────────────────────────────
@@ -725,7 +743,12 @@ class WorksheetRecognizer:
         self._result_cache = LRUDict(max_size=64)
         self._pass1_cache = LRUDict(max_size=64)
 
-        if _is_anthropic_provider():
+        provider = _detect_provider()
+        if provider == "offline":
+            # 离线模式：无需任何 HTTP client，识别结果从本地预存 JSON 读取
+            self._provider = "offline"
+            self.client = None
+        elif provider == "anthropic":
             self._provider = "anthropic"
             self.client = anthropic.AsyncAnthropic(
                 api_key=settings.VISION_API_KEY,
@@ -763,6 +786,23 @@ class WorksheetRecognizer:
             result = dict(cached)
             result["_meta"] = dict(result.get("_meta", {}))
             result["_meta"]["cache_hit"] = True
+            return result
+
+        # ── Offline provider: read pre-stored recognition result by image hash ──
+        if self._provider == "offline":
+            result = self._offline_lookup(image_hash, age_group)
+            result["_meta"] = {
+                "model": self.model,
+                "usage": {"input_tokens": 0, "output_tokens": 0, "total_tokens": 0},
+                "provider": "offline",
+                "multi_pass": False,
+            }
+            result.setdefault("problems", [])
+            result.setdefault("observations", {})
+            result.setdefault("dimension_scores_preliminary", {})
+            result.setdefault("worksheet_type", "unknown")
+            if use_cache:
+                self._result_cache[image_hash] = result
             return result
 
         base64_image = base64.b64encode(image_data).decode("utf-8")
@@ -1268,6 +1308,62 @@ class WorksheetRecognizer:
             max_tokens=settings.VISION_MAX_TOKENS,
             timeout=settings.VISION_TIMEOUT_SECONDS,
         )
+
+    # ── Offline provider ────────────────────────────────────────────────
+
+    def _offline_lookup(self, image_hash: str, age_group: Optional[str] = None) -> dict:
+        """Read a pre-stored recognition result from the offline results dir.
+
+        The offline directory (settings.OFFLINE_RESULTS_DIR) holds one subdirectory
+        per worksheet image. Each subdirectory contains:
+          - ``image_hash.txt``  : the SHA-256 hash of the source image (first line)
+          - ``recognition_result.json`` : the recognition result dict
+
+        Matching is by image hash so the same image always yields the same result.
+        """
+        results_dir = Path(settings.OFFLINE_RESULTS_DIR)
+        if not results_dir.is_dir():
+            raise RuntimeError(
+                f"离线模式：结果目录不存在 ({results_dir})。"
+                f"请在 .env 中正确设置 OFFLINE_RESULTS_DIR，"
+                f"或切换 VISION_PROVIDER 到 qwen/claude。"
+            )
+
+        for case_dir in results_dir.iterdir():
+            if not case_dir.is_dir():
+                continue
+            hash_file = case_dir / "image_hash.txt"
+            result_file = case_dir / "recognition_result.json"
+            if not (hash_file.exists() and result_file.exists()):
+                continue
+            try:
+                stored_hash = hash_file.read_text(encoding="utf-8").strip().splitlines()[0].strip()
+            except (OSError, IndexError):
+                continue
+            if stored_hash == image_hash:
+                with open(result_file, "r", encoding="utf-8") as f:
+                    return json.load(f)
+
+        # 未匹配到预存结果：返回友好的空结果（而非抛异常），让前端能正常展示"暂无分析"
+        # 同时在 observations 里附说明，提示该图未被预识别
+        return {
+            "worksheet_type": "unknown",
+            "age_group_hint": age_group or "middle",
+            "problems": [],
+            "observations": {
+                "learning_objective": "离线模式：该图片未预存识别结果",
+                "number_formation_issues": [],
+                "attention_indicators": "skipped",
+                "task_completion_context": "independent",
+                "overall_pck_notes": (
+                    f"离线模式仅能识别预存的测试图片。当前图片（hash={image_hash[:12]}…）"
+                    f"未在离线库中。要识别任意图片，请在 .env 配置 VISION_PROVIDER=qwen 或 claude，"
+                    f"并填入对应 API key。"
+                ),
+            },
+            "dimension_scores_preliminary": {},
+            "_offline_unmatched": True,
+        }
 
     def clear_cache(self) -> int:
         count = len(self._result_cache) + len(self._pass1_cache)

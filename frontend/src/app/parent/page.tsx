@@ -16,12 +16,83 @@ function isWeChat(): boolean {
 
 type Screen = "login" | "loading" | "report";
 
+/** 从 localStorage 读之前的绑定信息（避免重启/刷新后要求重新输码） */
+function readStoredBind() {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = window.localStorage.getItem("parent_bind");
+    if (!raw) return null;
+    return JSON.parse(raw);
+  } catch {
+    return null;
+  }
+}
+
 export default function ParentPage() {
   const [accessCode, setAccessCode] = useState("");
   const [screen, setScreen] = useState<Screen>("login");
   const [report, setReport] = useState<ParentReport | null>(null);
   const [childName, setChildName] = useState("");
   const [error, setError] = useState("");
+  const [noReport, setNoReport] = useState(false);
+
+  // Cold start 自动恢复绑定：直接从 localStorage 拿 childId，跳过输码
+  useEffect(() => {
+    const stored = readStoredBind();
+    if (stored && stored.child_id) {
+      void loadLatestReport(stored.child_id, stored.child_name || "宝宝");
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  /** 根据 childId 加载最新报告（供初次绑定和 cold start 共用） */
+  const loadLatestReport = async (childId: number, name: string) => {
+    setScreen("loading");
+    setChildName(name);
+    setError("");
+    try {
+      const { api } = await import("@/lib/api-client");
+      const latest = await api.parent.latestReport(childId);
+      if (latest.has_report) {
+        // 适配 latest-report 的精简结构 → ParentReport 的展示结构
+        // strengths/growing_areas 已是对象数组；family_activities 是字符串数组
+        const adaptItem = (it: { area?: string; emoji?: string; description?: string; parent_observation_tip?: string }) => ({
+          area: it.area || "",
+          emoji: it.emoji || "⭐",
+          description: it.description || "",
+          parent_observation_tip: it.parent_observation_tip || "",
+        });
+        setReport({
+          child_name: name,
+          age_group: latest.age_group || "middle",
+          generated_at: latest.generated_at || "",
+          report_type: "parent",
+          overall_summary: latest.overall_summary || "",
+          strengths: (latest.strengths || []).map(adaptItem),
+          growing_areas: (latest.growing_areas || []).map(adaptItem),
+          family_activities: (latest.family_activities || []).map((it) => ({
+            title: it.title || "",
+            materials: it.materials || "",
+            steps: it.steps || "",
+            math_concept: it.why || "",
+          })),
+          learning_quality_notes: latest.learning_quality_notes || "",
+          parent_tips: latest.parent_tips || "",
+        } as unknown as ParentReport);
+        setScreen("report");
+      } else {
+        setScreen("login");
+        setNoReport(true);
+        toast.info(latest.message || "该幼儿暂无分析报告，请联系老师生成");
+      }
+    } catch (err) {
+      // 加载失败（storage 失效、网络问题等）—— 退到登录页
+      const message = err instanceof Error ? err.message : "加载失败";
+      toast.error(message);
+      setScreen("login");
+      setError(message);
+    }
+  };
 
   const handleAccess = async () => {
     const code = accessCode.trim();
@@ -34,22 +105,29 @@ export default function ParentPage() {
     setError("");
 
     try {
-      // Step 1: Authenticate with parent access code
+      // 用 api-client 统一发请求（走 next.config 的 rewrite 到后端，base URL 正确）
       const { api } = await import("@/lib/api-client");
-      const loginRes = await api.auth.parentAccess(code);
+      const bindData = await api.parent.bind(code);
+      const childId = bindData.child_id as number;
+      const name = (bindData.child_name as string) || "宝宝";
 
-      if (!loginRes.access_token) {
-        throw new Error("访问码验证失败");
+      // 持久化绑定信息（cold start 自动恢复用）
+      try {
+        window.localStorage.setItem(
+          "parent_bind",
+          JSON.stringify({
+            child_id: childId,
+            child_name: name,
+            age_group: bindData.age_group,
+            bound_at: Date.now(),
+          })
+        );
+      } catch {
+        // storage 可能被禁用，不阻断主流程
       }
 
-      // Step 2: Get child's demo parent report
-      // In production, this would look up the actual report by child_id
-      const childId = loginRes.user?.child_id;
-      const reportData = await api.reports.demoParent("middle", "宝宝");
-      setReport(reportData);
-      setChildName("宝宝");
-      setScreen("report");
-      toast.success("验证成功！欢迎查看宝宝的学习观察记录 🌈");
+      // 复用 loadLatestReport（带绑定信息）
+      await loadLatestReport(childId, name);
     } catch (err) {
       const message = err instanceof Error ? err.message : "访问码无效";
       setError(message);
@@ -93,6 +171,12 @@ export default function ParentPage() {
             />
             {error && (
               <p className="text-sm text-red-500 mt-2">{error}</p>
+            )}
+            {noReport && !error && (
+              <p className="text-sm text-amber-600 mt-2 bg-amber-50 p-2.5 rounded-lg border border-amber-200">
+                ✅ 访问码正确（{childName}），但该幼儿暂无分析报告。
+                <br />请联系老师先上传操作单生成报告。
+              </p>
             )}
           </div>
 
@@ -162,7 +246,11 @@ export default function ParentPage() {
               <p className="text-xs text-slate-400 hidden sm:block">基于数学操作单分析生成</p>
             </div>
             <button
-              onClick={() => { setScreen("login"); setReport(null); }}
+              onClick={() => {
+                setScreen("login");
+                setReport(null);
+                try { window.localStorage.removeItem("parent_bind"); } catch {}
+              }}
               className="text-sm text-slate-400 hover:text-slate-600 active:text-slate-800 py-2 px-1"
               style={{ minHeight: "44px", minWidth: "44px" }}
             >

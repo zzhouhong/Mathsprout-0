@@ -1,11 +1,10 @@
-﻿<!-- pages/index/index.wxml — Parent bind via access code -->
 <view class="container">
   <view class="card">
     <view class="icon">👶</view>
     <view class="title">萌芽数学 Mathsprout</view>
     <view class="subtitle">输入老师提供的访问码查看宝宝成长记录</view>
 
-    <input class="code-input" type="text" value="{{code}}" placeholder="请输入访问码（如 XIAOMING01）"
+    <input class="code-input" type="text" value="{{code}}" placeholder="请输入访问码"
            bindinput="onCodeInput" maxlength="16" />
 
     <button class="btn-primary" bindtap="onBind" loading="{{loading}}" disabled="{{!code}}">
@@ -14,4 +13,6 @@
 
     <view class="error" wx:if="{{error}}">{{error}}</view>
   </view>
+
+  <navigator url="/pages/teacher/login/login" class="teacher-link">🔐 我是教师</navigator>
 </view>

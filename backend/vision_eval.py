@@ -54,6 +54,11 @@ PROVIDER_PRESETS = {
         "VISION_BASE_URL": "https://api.anthropic.com",
         # API key must be set separately as ANTHROPIC_API_KEY in .env
     },
+    "offline": {
+        "VISION_MODEL": "offline",
+        "VISION_BASE_URL": "local",
+        # 离线模式：从 OFFLINE_RESULTS_DIR 按图片哈希读取预存识别结果，零 API 依赖
+    },
 }
 
 
@@ -67,6 +72,12 @@ def switch_provider(provider: str):
 
     os.environ["VISION_MODEL"] = preset["VISION_MODEL"]
     os.environ["VISION_BASE_URL"] = preset["VISION_BASE_URL"]
+
+    # offline provider 走离线分支：显式设置 VISION_PROVIDER 让 recognizer 检测到
+    if provider == "offline":
+        os.environ["VISION_PROVIDER"] = "offline"
+    else:
+        os.environ.pop("VISION_PROVIDER", None)
 
     # For Claude, use ANTHROPIC_API_KEY if VISION_API_KEY isn't already anthropic
     if provider == "claude":
@@ -274,7 +285,7 @@ async def main():
     parser.add_argument("--quality", "-q", type=str, default="balanced",
                         choices=["fast", "balanced", "precise"], help="预处理质量（默认: balanced）")
     parser.add_argument("--provider", "-p", type=str, default="qwen",
-                        choices=["qwen", "claude"], help="AI 提供商（默认: qwen）")
+                        choices=["qwen", "claude", "offline"], help="AI 提供商（默认: qwen；offline 走离线预存结果）")
     parser.add_argument("--no-cache", action="store_true", help="禁用缓存（强制重新识别）")
     parser.add_argument("--save-crops", action="store_true", help="保存预处理图片到 tests/output/")
     parser.add_argument("--format", "-f", type=str, choices=["json", "markdown"], default="json",

@@ -22,6 +22,10 @@ class Settings(BaseSettings):
     VISION_MAX_TOKENS: int = 2048  # 减少输出 token 以加速 AI 识别响应
     VISION_CACHE_ENABLED: bool = True
     VISION_TIMEOUT_SECONDS: int = 60  # API 调用超时
+    # 显式指定视觉提供商：留空则按 VISION_BASE_URL 自动检测（含 anthropic.com/claude → anthropic，否则 openai 兼容）
+    # 设为 "offline" 时走离线模式：从 OFFLINE_RESULTS_DIR 按图片哈希读取预存识别结果，零 API 依赖
+    VISION_PROVIDER: str = ""
+    OFFLINE_RESULTS_DIR: str = "./tests/images/golden"  # offline provider 读取预存识别结果的目录
 
     # Image Processing
     IMAGE_MAX_SIZE_PX: int = 2048

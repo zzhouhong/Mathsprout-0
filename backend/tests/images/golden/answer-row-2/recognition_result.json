@@ -1,0 +1,34 @@
+{
+  "worksheet_type": "mixed",
+  "age_group_hint": "middle",
+  "problems": [
+    {
+      "id": "P1",
+      "type": "shape_id",
+      "dimension": "shapes_space",
+      "correct_answer": "4",
+      "child_answer": "4",
+      "is_correct": true,
+      "confidence": 0.7,
+      "handwriting_quality": "clear",
+      "has_erasure": false,
+      "erasure_pattern": "none",
+      "strategy_indicators": "",
+      "prompt_description": "识别图中三角形数量，底部数字行 1-5 供圈选，正确答案为 4"
+    }
+  ],
+  "observations": {
+    "learning_objective": "感知三角形的特征，识别并点数图形",
+    "number_formation_issues": [],
+    "attention_indicators": "careful",
+    "task_completion_context": "independent",
+    "overall_pck_notes": "图形识别任务，幼儿圈选了正确数字"
+  },
+  "dimension_scores_preliminary": {
+    "shapes_space": {
+      "correct": 1,
+      "total": 1,
+      "score": 100
+    }
+  }
+}
