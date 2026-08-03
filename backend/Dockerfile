@@ -22,6 +22,5 @@ ENV DATABASE_URL=sqlite+aiosqlite:////var/lib/mathsprout/data/mathsprout.db \
     REPORT_DIR=/var/lib/mathsprout/reports \
     ENVIRONMENT=production
 EXPOSE 8000
-# 临时诊断 CMD：先打印所有诊断到 stdout + 文件，再 sleep 600 保持容器活着（让我用 Webshell 看 stdout）
-# 注意：sleep 在前台，容器进程不会退出
-CMD ["sh", "-c", "echo === boot diag ===; echo DATABASE_URL=$DATABASE_URL; echo VISION_PROVIDER=$VISION_PROVIDER; echo ENVIRONMENT=$ENVIRONMENT; echo PYTHON_VERSION=$(python --version); echo PWD=$(pwd); echo USER=$(id); ls -la /var/lib/mathsprout 2>&1; ls -la /app | head -20; which uvicorn; uvicorn --version 2>&1; echo === uvicorn app.main import test ===; python -c 'from app.main import app; print(\"app import OK, routes:\", len(app.routes))' 2>&1; echo === will sleep 600s to keep container alive ===; sleep 600"]
+# 生产启动：start.sh 负责绑定 0.0.0.0:$PORT 并做导入预检（失败保持容器存活便于诊断）
+CMD ["sh", "./start.sh"]

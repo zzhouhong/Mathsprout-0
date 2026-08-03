@@ -280,6 +280,11 @@ def create_app() -> FastAPI:
 
     # ── Health & Stats ──
 
+    @app.get("/")
+    async def root():
+        # 云托管默认健康检查常探测根路径 "/"，必须返回 2xx 才能通过探针
+        return {"status": "ok", "service": settings.APP_NAME, "version": settings.APP_VERSION}
+
     @app.get("/api/health")
     async def health_check():
         from app.core.database import check_db_connection
