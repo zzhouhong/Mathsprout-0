@@ -22,5 +22,6 @@ ENV DATABASE_URL=sqlite+aiosqlite:////var/lib/mathsprout/data/mathsprout.db \
     REPORT_DIR=/var/lib/mathsprout/reports \
     ENVIRONMENT=production
 EXPOSE 8000
-# 启动脚本：先 print 诊断信息，再 exec uvicorn（ENVIRONMENT=production 让 lifespan 跳过 seed_demo_children）
-CMD ["sh", "-c", "echo === boot diag === && echo DATABASE_URL=$DATABASE_URL && echo VISION_PROVIDER=$VISION_PROVIDER && echo ENVIRONMENT=$ENVIRONMENT && ls -la /var/lib/mathsprout && echo === exec uvicorn === && exec uvicorn app.main:app --host 0.0.0.0 --port 8000 --log-level info"]
+# 临时诊断 CMD：先打印所有诊断到 stdout + 文件，再 sleep 600 保持容器活着（让我用 Webshell 看 stdout）
+# 注意：sleep 在前台，容器进程不会退出
+CMD ["sh", "-c", "echo === boot diag ===; echo DATABASE_URL=$DATABASE_URL; echo VISION_PROVIDER=$VISION_PROVIDER; echo ENVIRONMENT=$ENVIRONMENT; echo PYTHON_VERSION=$(python --version); echo PWD=$(pwd); echo USER=$(id); ls -la /var/lib/mathsprout 2>&1; ls -la /app | head -20; which uvicorn; uvicorn --version 2>&1; echo === uvicorn app.main import test ===; python -c 'from app.main import app; print(\"app import OK, routes:\", len(app.routes))' 2>&1; echo === will sleep 600s to keep container alive ===; sleep 600"]
