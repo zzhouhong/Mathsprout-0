@@ -1,0 +1,15 @@
+{
+  "description": "图形+计数混合 — 验证 '数三角形' 题型应映射到 shapes_space 而非 counting（图形优先原则）",
+  "child": "小几何",
+  "age": "large",
+  "vision": {
+    "worksheet_type": "mixed",
+    "problems": [
+      {"id": "P1", "type": "shape_counting", "child_answer": "5", "correct_answer": "5", "is_correct": true, "confidence": 0.9, "handwriting_quality": "clear", "has_erasure": false, "erasure_pattern": "none", "strategy_indicators": ""},
+      {"id": "P2", "type": "shape_count", "child_answer": "3", "correct_answer": "4", "is_correct": false, "confidence": 0.8, "handwriting_quality": "clear", "has_erasure": false, "erasure_pattern": "none", "strategy_indicators": ""},
+      {"id": "P3", "type": "shape_id", "child_answer": "正方形", "correct_answer": "正方形", "is_correct": true, "confidence": 0.95, "handwriting_quality": "clear", "has_erasure": false, "erasure_pattern": "none", "strategy_indicators": ""},
+      {"id": "P4", "type": "spatial", "child_answer": "里面", "correct_answer": "里面", "is_correct": true, "confidence": 0.9, "handwriting_quality": "clear", "has_erasure": false, "erasure_pattern": "none", "strategy_indicators": ""}
+    ],
+    "observations": {"overall_pck_notes": "混合图形识别与计数任务的题型，以图形感知为优先维度"}
+  }
+}

@@ -1,0 +1,81 @@
+<!-- pages/teacher/capture/capture.wxml — 教师拍照分析 -->
+<view class="container">
+  <view class="header">📸 拍照分析</view>
+
+  <!-- 幼儿与年龄段选择 -->
+  <view class="selector-section">
+    <view class="selector-item">
+      <text class="selector-label">幼儿</text>
+      <picker bindchange="onChildChange" value="{{childIndex}}" range="{{childNames}}" wx:if="{{childNames.length}}">
+        <view class="picker-value">{{childIndex >= 0 ? childNames[childIndex] : '请选择幼儿'}}</view>
+      </picker>
+      <view class="picker-value picker-loading" wx:else>加载幼儿列表中...</view>
+    </view>
+    <view class="selector-item">
+      <text class="selector-label">年龄段</text>
+      <picker bindchange="onAgeChange" value="{{['small','middle','large'].indexOf(selectedAgeGroup)}}" range="{{['小班（3-4岁）','中班（4-5岁）','大班（5-6岁）']}}">
+        <view class="picker-value">
+          {{selectedAgeGroup === 'small' ? '小班（3-4岁）' : selectedAgeGroup === 'large' ? '大班（5-6岁）' : '中班（4-5岁）'}}
+        </view>
+      </picker>
+    </view>
+  </view>
+
+  <!-- 预览区 -->
+  <view class="preview" wx:if="{{src}}" bindtap="previewImg">
+    <image src="{{src}}" mode="aspectFit" style="width:100%;height:500rpx" />
+    <view class="preview-hint">点击图片可放大预览 🔍</view>
+  </view>
+  <view class="preview-empty" wx:else>
+    <view class="empty-icon">📷</view>
+    <view class="empty-text">拍照或从相册选择操作单</view>
+  </view>
+
+  <!-- 操作按钮 -->
+  <button class="btn" bindtap="takePhoto">📷 拍照</button>
+  <button class="btn" bindtap="choosePhoto">🖼 从相册选择</button>
+  <button class="btn-primary" wx:if="{{src}}" bindtap="analyze" loading="{{analyzing}}" disabled="{{analyzing}}">
+    {{analyzing ? 'AI分析中...' : '🚀 开始分析'}}
+  </button>
+
+  <!-- 错误 -->
+  <view class="error-text" wx:if="{{error}}">❌ {{error}}</view>
+
+  <!-- 分析结果 -->
+  <view class="result" wx:if="{{result}}">
+    <!-- 维度评分 -->
+    <view class="section-title">📊 维度评分</view>
+    <view class="score-item" wx:for="{{result.dims}}" wx:key="name">
+      <view class="dim-name">{{item.name}}</view>
+      <view class="dim-score">{{item.score}}分 {{item.level}}</view>
+    </view>
+
+    <!-- 总评 -->
+    <view class="section-title" wx:if="{{result.summary}}">📝 总评</view>
+    <view class="summary-text" wx:if="{{result.summary}}">{{result.summary}}</view>
+
+    <!-- 教学建议 -->
+    <view class="section-title" wx:if="{{result.suggestions.length}}">💡 教学建议</view>
+    <view class="suggestion-card" wx:for="{{result.suggestions}}" wx:key="dimension">
+      <view class="suggestion-dim">{{item.dimension}} <text class="suggestion-level">{{item.level}}</text></view>
+      <view class="suggestion-text" wx:if="{{item.recommendations}}">{{item.recommendations}}</view>
+      <view class="suggestion-act" wx:if="{{item.activities}}">🎯 {{item.activities}}</view>
+    </view>
+
+    <!-- 每题识别明细 -->
+    <view class="section-title" wx:if="{{result.traces.length}}">🔍 每题识别明细</view>
+    <view class="trace-item" wx:for="{{result.traces}}" wx:key="problem">
+      <view class="trace-problem">{{item.problem}}</view>
+      <view class="trace-dim">{{item.dimension}}</view>
+      <view class="trace-answers">
+        幼儿答案：<text class="{{item.is_correct ? 'trace-correct' : 'trace-wrong'}}">{{item.child_answer}}</text>
+        ｜ 标准答案：{{item.correct_answer}}
+      </view>
+    </view>
+
+    <!-- 查看完整报告 -->
+    <button class="btn-outline" wx:if="{{result.reportId}}" bindtap="viewFullReport">
+      📄 查看完整报告
+    </button>
+  </view>
+</view>

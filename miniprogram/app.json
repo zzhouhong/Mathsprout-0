@@ -1,0 +1,28 @@
+{
+  "pages": [
+    "pages/index/index",
+    "pages/home/home",
+    "pages/report/report",
+    "pages/history/history",
+    "pages/teacher/login/login",
+    "pages/teacher/capture/capture",
+    "pages/teacher/class-view/class-view",
+    "pages/teacher/child-detail/child-detail",
+    "pages/teacher/generate/generate",
+    "pages/teacher/child-form/child-form"
+  ],
+  "window": {
+    "navigationBarBackgroundColor": "#4F46E5",
+    "navigationBarTitleText": "萌芽数学",
+    "navigationBarTextStyle": "white",
+    "backgroundColor": "#F8FAFC"
+  },
+  "tabBar": {
+    "color": "#94A3B8",
+    "selectedColor": "#4F46E5",
+    "list": [
+      { "pagePath": "pages/home/home", "text": "成长", "iconPath": "assets/tabbar/growth.png", "selectedIconPath": "assets/tabbar/growth-active.png" },
+      { "pagePath": "pages/history/history", "text": "记录", "iconPath": "assets/tabbar/records.png", "selectedIconPath": "assets/tabbar/records-active.png" }
+    ]
+  }
+}

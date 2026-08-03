@@ -1,0 +1,10 @@
+{
+  "description": "空白操作单 — 验证早期返回机制，所有维度应为 L1 并给出引导信息",
+  "child": "小新",
+  "age": "middle",
+  "vision": {
+    "worksheet_type": "incomplete",
+    "problems": [],
+    "observations": {"overall_pck_notes": "操作单未完成，无幼儿作答痕迹"}
+  }
+}

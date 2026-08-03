@@ -1,0 +1,15 @@
+{
+  "description": "中文数字场景 — 幼儿用汉字作答（如 '五' 而非 '5'），验证中文数字处理",
+  "child": "小文豪",
+  "age": "large",
+  "vision": {
+    "worksheet_type": "mixed",
+    "problems": [
+      {"id": "P1", "type": "counting", "child_answer": "五", "correct_answer": "5", "is_correct": true, "confidence": 0.8, "handwriting_quality": "clear", "has_erasure": false, "erasure_pattern": "none", "strategy_indicators": "mental"},
+      {"id": "P2", "type": "counting", "child_answer": "三", "correct_answer": "3", "is_correct": true, "confidence": 0.8, "handwriting_quality": "clear", "has_erasure": false, "erasure_pattern": "none", "strategy_indicators": "mental"},
+      {"id": "P3", "type": "add_10", "child_answer": "七", "correct_answer": "7", "is_correct": true, "confidence": 0.75, "handwriting_quality": "clear", "has_erasure": false, "erasure_pattern": "none", "strategy_indicators": "mental"},
+      {"id": "P4", "type": "sub_10", "child_answer": "四", "correct_answer": "4", "is_correct": true, "confidence": 0.75, "handwriting_quality": "clear", "has_erasure": false, "erasure_pattern": "none", "strategy_indicators": "mental"}
+    ],
+    "observations": {"overall_pck_notes": "幼儿习惯使用汉字数字作答，属大班正常表达方式"}
+  }
+}

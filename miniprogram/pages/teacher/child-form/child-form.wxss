@@ -1,0 +1,25 @@
+.container { padding:40rpx; }
+.header { font-size:36rpx; font-weight:700; margin-bottom:32rpx; }
+
+.field { background:#fff; border-radius:16rpx; padding:24rpx; margin-bottom:20rpx; }
+.label { font-size:26rpx; color:#64748B; display:block; margin-bottom:12rpx; }
+.input { font-size:30rpx; color:#1E293B; padding:8rpx 0; }
+.textarea { font-size:28rpx; color:#1E293B; width:100%; min-height:120rpx; padding:8rpx 0; }
+.picker-value { font-size:30rpx; color:#1E293B; padding:8rpx 0; }
+
+.btn-primary { background:#4F46E5; color:#fff; border-radius:16rpx; margin-top:16rpx; }
+
+.error-text { color:#EF4444; font-size:26rpx; padding:12rpx 0; }
+
+/* 成功卡片 */
+.success-card { background:#fff; border-radius:20rpx; padding:48rpx 32rpx; text-align:center; }
+.success-icon { font-size:80rpx; }
+.success-title { font-size:34rpx; font-weight:700; color:#16A34A; margin:16rpx 0 8rpx; }
+.success-name { font-size:30rpx; color:#1E293B; margin-bottom:32rpx; }
+.code-label { font-size:26rpx; color:#64748B; margin-bottom:12rpx; }
+.code-value {
+  font-size:52rpx; font-weight:700; color:#4F46E5;
+  letter-spacing:8rpx; padding:20rpx; background:#F1F5F9; border-radius:16rpx;
+  display:inline-block; margin-bottom:12rpx;
+}
+.code-hint { font-size:22rpx; color:#94A3B8; margin-bottom:32rpx; }

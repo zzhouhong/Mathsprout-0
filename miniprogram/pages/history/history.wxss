@@ -1,0 +1,7 @@
+.container { padding:40rpx; background:#F8FAFC; min-height:100vh; }
+.header { font-size:36rpx; font-weight:700; margin-bottom:24rpx; }
+.item { background:#fff; border-radius:16rpx; padding:32rpx; margin-bottom:16rpx; }
+.item-date { font-size:24rpx; color:#94A3B8; margin-bottom:8rpx; }
+.item-summary { font-size:28rpx; color:#475569; line-height:1.5; }
+.item-type { font-size:24rpx; color:#4F46E5; margin-top:8rpx; }
+.empty { text-align:center; padding:100rpx 0; color:#94A3B8; }

@@ -1,0 +1,18 @@
+{
+  "age_group": "middle",
+  "child_name": "测试幼儿",
+  "expected": {
+    "worksheet_type": "mixed",
+    "problem_count": {
+      "min": 0,
+      "max": 2
+    },
+    "dimensions_covered": [],
+    "at_least_one_correct": false,
+    "problems": []
+  },
+  "tolerance": {
+    "min_dimensions_scored": 0,
+    "max_unrecognized_ratio": 1.0
+  }
+}

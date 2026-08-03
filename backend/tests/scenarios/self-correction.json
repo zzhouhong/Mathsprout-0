@@ -1,0 +1,16 @@
+{
+  "description": "自我纠正场景 — 幼儿有明显的擦改痕迹，验证自我纠错检测",
+  "child": "小橡皮",
+  "age": "middle",
+  "vision": {
+    "worksheet_type": "mixed",
+    "problems": [
+      {"id": "P1", "type": "counting", "child_answer": "5", "correct_answer": "5", "is_correct": true, "confidence": 0.85, "handwriting_quality": "clear", "has_erasure": true, "erasure_pattern": "self_correct", "strategy_indicators": ""},
+      {"id": "P2", "type": "add_10", "child_answer": "7", "correct_answer": "7", "is_correct": true, "confidence": 0.85, "handwriting_quality": "clear", "has_erasure": true, "erasure_pattern": "self_correct", "strategy_indicators": "finger_counting"},
+      {"id": "P3", "type": "sub_10", "child_answer": "3", "correct_answer": "3", "is_correct": true, "confidence": 0.9, "handwriting_quality": "clear", "has_erasure": false, "erasure_pattern": "none", "strategy_indicators": "mental"},
+      {"id": "P4", "type": "shape_id", "child_answer": "三角形", "correct_answer": "三角形", "is_correct": true, "confidence": 0.95, "handwriting_quality": "clear", "has_erasure": false, "erasure_pattern": "none", "strategy_indicators": ""},
+      {"id": "P5", "type": "counting", "child_answer": "4", "correct_answer": "4", "is_correct": true, "confidence": 0.9, "handwriting_quality": "clear", "has_erasure": true, "erasure_pattern": "self_correct", "strategy_indicators": "counting_objects"}
+    ],
+    "observations": {"overall_pck_notes": "幼儿有明显的自我纠正行为，反映元认知监控能力正在发展"}
+  }
+}

@@ -1,0 +1,34 @@
+{
+  "worksheet_type": "mixed",
+  "age_group_hint": "middle",
+  "problems": [
+    {
+      "id": "P1",
+      "type": "shape_id",
+      "dimension": "shapes_space",
+      "correct_answer": "1",
+      "child_answer": "1",
+      "is_correct": true,
+      "confidence": 0.7,
+      "handwriting_quality": "clear",
+      "has_erasure": false,
+      "erasure_pattern": "none",
+      "strategy_indicators": "",
+      "prompt_description": "感知三角形多形式，正确答案为 1，幼儿圈选了 1"
+    }
+  ],
+  "observations": {
+    "learning_objective": "感知三角形的多形式，在拼搭中体会图形的翻转和位置变化",
+    "number_formation_issues": [],
+    "attention_indicators": "careful",
+    "task_completion_context": "independent",
+    "overall_pck_notes": "图形识别任务，幼儿圈选正确"
+  },
+  "dimension_scores_preliminary": {
+    "shapes_space": {
+      "correct": 1,
+      "total": 1,
+      "score": 100
+    }
+  }
+}
