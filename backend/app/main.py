@@ -112,11 +112,18 @@ async def lifespan(app: FastAPI):
     logger.info(f"🚀 {settings.APP_NAME} v{settings.APP_VERSION} starting...")
     logger.info(f"   Environment: {settings.ENVIRONMENT}")
     logger.info(f"   Upload dir: {settings.UPLOAD_DIR}")
-    await init_db()  # Auto-create tables on startup
+    # init_db() 必须容错：失败不致命（服务仍可监听 8000 并响应健康检查）
+    try:
+        await init_db()  # Auto-create tables on startup
+    except Exception as _e:
+        logger.error(f"init_db failed (non-fatal): {type(_e).__name__}: {_e}", exc_info=True)
 
     # Seed demo data in development
     if settings.ENVIRONMENT == "development":
-        await seed_demo_children()
+        try:
+            await seed_demo_children()
+        except Exception as _e:
+            logger.warning(f"seed_demo_children skipped: {_e}")
 
     yield
     # Shutdown
