@@ -29,6 +29,28 @@ App({
         traceUser: true,
       });
     }
+    // 隐私授权拦截：本小程序会采集幼儿照片 / 姓名等个人信息，
+    // 微信要求首次调用隐私接口（如 wx.chooseMedia）前必须弹窗授权，
+    // 否则真机 chooseMedia 会直接调用失败。
+    // 注意：仍需在微信公众平台「设置 → 隐私保护指引」填写《隐私保护指引》本拦截才生效。
+    if (typeof wx.onNeedPrivacyAuthorize === "function") {
+      wx.onNeedPrivacyAuthorize((resolve) => {
+        wx.showModal({
+          title: "隐私授权",
+          content:
+            "本小程序会采集幼儿照片与姓名，用于生成观察记录与反馈单。请阅读并同意《隐私保护指引》后继续使用。",
+          confirmText: "同意",
+          cancelText: "拒绝",
+          success: (res) => {
+            if (res.confirm) {
+              resolve({ event: "agree" });
+            } else {
+              resolve({ event: "disagree" });
+            }
+          },
+        });
+      });
+    }
   },
   globalData: {
     childId: null,
