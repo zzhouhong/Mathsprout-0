@@ -1,0 +1,31 @@
+# 本地产物，不应进入镜像
+.venv
+__pycache__
+*.pyc
+*.pyo
+*.pyd
+
+# 版本控制
+.git
+.gitignore
+
+# 运行时目录（Dockerfile 已 mkdir）
+uploads
+reports
+cache
+
+# 环境变量与密钥
+.env
+.env.*
+
+# 测试与文档（仅减小构建体积）
+tests
+# 放行离线识别用的预存结果目录（仅 316K，离线模式必需）
+!tests/images
+!tests/images/golden
+.pytest_cache
+*.md
+
+# 系统文件
+.DS_Store
+*.log

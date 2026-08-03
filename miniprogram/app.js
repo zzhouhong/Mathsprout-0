@@ -8,12 +8,11 @@
 //      免域名 / 免 ICP 备案 / 免 HTTPS，正式发布推荐
 // ───────────────────────────────────────────────
 
-// 是否走微信云托管。部署到云托管并拿到环境 ID 后改为 true
-const USE_CLOUD = false;
+// 是否走微信云托管。已部署到云托管，改为 true
+const USE_CLOUD = true;
 
-// 云开发环境 ID（微信开发者工具 → 云开发 → 环境设置，形如 cloud1-xxxxxxxx）
-// USE_CLOUD = true 时必须填入真实环境 ID，否则 callContainer 会失败
-const CLOUD_ENV = "请替换为你的云开发环境ID";
+// 云开发环境 ID（微信云托管控制台右上角环境 ID；backend 服务部署于此环境）
+const CLOUD_ENV = "prod-d6gj3mfkye02c4455";
 
 // 云托管服务名称（微信云托管 → 服务管理 → 服务列表中的服务名）
 const CLOUD_SERVICE = "backend";
