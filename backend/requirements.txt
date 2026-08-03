@@ -3,6 +3,7 @@ uvicorn[standard]==0.34.0
 python-multipart==0.0.18
 sqlalchemy==2.0.36
 aiosqlite==0.20.0
+greenlet>=3.0.0  # SQLAlchemy 异步引擎运行时必需（离线模式也依赖，缺失会 ImportError 崩溃）
 alembic==1.14.0
 pydantic==2.10.3
 pydantic-settings==2.7.0
