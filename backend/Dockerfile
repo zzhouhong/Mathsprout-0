@@ -3,7 +3,7 @@ WORKDIR /app
 # Debian 12 (bookworm) 包名修正：libgl1-mesa-glx 已重命名为 libgl1；
 # 另补 cv2(opencv-headless) 运行所需的 libsm6/libxext6/libxrender1
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    libgl1 libglib2.0-0 libsm6 libxext6 libxrender1 poppler-utils \
+    libgl1 libglib2.0-0 libgomp1 libsm6 libxext6 libxrender1 poppler-utils \
     && rm -rf /var/lib/apt/lists/*
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt

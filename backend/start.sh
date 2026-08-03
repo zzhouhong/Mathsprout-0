@@ -16,6 +16,9 @@ echo "=== import app.main (pre-check) ===" | tee -a "$LOG"
 python -c "from app.main import app; print('IMPORT_OK routes=', len(app.routes))" > /tmp/import_result.txt 2>&1
 cat /tmp/import_result.txt | tee -a "$LOG"
 
+# 把诊断主动上报到 ntfy（本机可读，无需公网/Webshell）
+python report_diag.py | tee -a "$LOG"
+
 if python -c "from app.main import app" >/dev/null 2>&1; then
   echo ">>> launching uvicorn on 0.0.0.0:$PORT" | tee -a "$LOG"
   uvicorn app.main:app --host 0.0.0.0 --port "$PORT" --proxy-headers --forwarded-allow-ips='*' >> "$LOG" 2>&1 &
