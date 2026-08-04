@@ -1,8 +1,25 @@
 {
   "version": "2.0",
-  "envId": "prod-d6gj3mfkye02c4455",
+  "envId": "mgya-d8gg4dtm6a418a70b",
   "$schema": "https://framework-1258016615.tcloudbaseapp.com/schema/latest.json",
   "cloudrun": {
-    "name": "backend"
+    "name": "backend",
+    "containerPort": 8000,
+    "dockerfilePath": "Dockerfile",
+    "buildDir": ".",
+    "cpu": 1,
+    "mem": 2,
+    "minNum": 1,
+    "maxNum": 3,
+    "policyType": "cpu",
+    "policyThreshold": 60,
+    "initialDelaySeconds": 30,
+    "customLogs": "stdout",
+    "envParams": {
+      "TEACHER_EMAIL": "ujvush@dingtalk.com",
+      "TEACHER_PASSWORD": "pRyEEtueuwXqHf",
+      "TEACHER_NAME": "崔老师"
+    },
+    "isPublic": true
   }
 }
