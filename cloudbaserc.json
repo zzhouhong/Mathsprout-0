@@ -15,12 +15,12 @@
     "policyThreshold": 60,
     "initialDelaySeconds": 30,
     "customLogs": "stdout",
-    "isPublic": true,
     "envVariables": {
+      "ENVIRONMENT": "production",
       "TEACHER_EMAIL": "ujvush@dingtalk.com",
       "TEACHER_PASSWORD": "pRyEEtueuwXqHf",
-      "TEACHER_NAME": "崔老师",
-      "ENVIRONMENT": "production"
-    }
+      "TEACHER_NAME": "崔老师"
+    },
+    "isPublic": true
   }
 }
