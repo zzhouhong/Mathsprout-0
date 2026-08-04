@@ -1,6 +1,6 @@
 {
   "version": "2.0",
-  "envId": "mgya-d8gg4dtm6a418a70b",
+  "envId": "prod-d6gj3mfkye02c4455",
   "$schema": "https://framework-1258016615.tcloudbaseapp.com/schema/latest.json",
   "cloudrun": {
     "name": "backend",

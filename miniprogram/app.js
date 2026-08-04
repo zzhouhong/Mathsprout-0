@@ -12,7 +12,9 @@
 const USE_CLOUD = true;
 
 // 云开发环境 ID（微信云托管控制台右上角环境 ID；backend 服务部署于此环境）
-const CLOUD_ENV = "mgya-d8gg4dtm6a418a70b";
+// ⚠️ 2026-08-04 确认：backend 部署在 prod-d6gj3mfkye02c4455（按量付费，真实环境）
+//    mgya-d8gg4dtm6a418a70b 是误建的体验版环境，不要用
+const CLOUD_ENV = "prod-d6gj3mfkye02c4455";
 
 // 云托管服务名称（微信云托管 → 服务管理 → 服务列表中的服务名）
 const CLOUD_SERVICE = "backend";
