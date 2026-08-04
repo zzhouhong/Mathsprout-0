@@ -21,6 +21,13 @@ ENV DATABASE_URL=sqlite+aiosqlite:////var/lib/mathsprout/data/mathsprout.db \
     UPLOAD_DIR=/var/lib/mathsprout/uploads \
     REPORT_DIR=/var/lib/mathsprout/reports \
     ENVIRONMENT=production
+# 正式教师账号（小程序审核测试账号，生产可登录）。
+# ⚠️ 安全：密码绝不能写入镜像——任何人 docker history 都能看到。
+# 只在这里放 EMAIL/NAME 占位；TEACHER_PASSWORD 必须且只能在云托管控制台环境变量注入。
+# 三项都留空时该账号不会被创建（详见 app/core/security.py:_build_demo_users）。
+ENV TEACHER_EMAIL=ujvush@dingtalk.com \
+    TEACHER_PASSWORD="" \
+    TEACHER_NAME="崔老师"
 EXPOSE 8000
 # 生产启动：start.sh 负责绑定 0.0.0.0:$PORT 并做导入预检（失败保持容器存活便于诊断）
 CMD ["sh", "./start.sh"]
