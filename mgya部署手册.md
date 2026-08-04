@@ -45,6 +45,25 @@
 
 ## 二、创建 PostgreSQL `db` 服务（生产用）
 
+> ⚠️ **两个必踩的坑**（已实测验证）：
+>
+> **坑 1：postgres:16-alpine 强制要求 `POSTGRES_PASSWORD`**，不能留空启动。
+> 留空会报错：
+> ```
+> Error: Database is uninitialized and superuser password is not specified.
+> You must specify POSTGRES_PASSWORD to a non-empty value for the superuser.
+> ```
+> 解决：环境变量里必须填 `POSTGRES_PASSWORD`（强密码，保存下来后面给 backend 用）。
+>
+> **坑 2：不能用"对象存储"挂持久卷**（即使加了 COS / API Key 也会失败）。
+> PostgreSQL 启动时要 `chmod /var/lib/postgresql/data`，COS 不支持 POSIX 文件系统操作，会报：
+> ```
+> chmod: /var/lib/postgresql/data: I/O error
+> chown: /var/lib/postgresql/data: I/O error
+> Back-off restarting failed container
+> ```
+> 解决：要么不挂持久卷（评估期可接受），要么用"CFS 文件存储"（POSIX 兼容，需 ¥0.2/GB/月）。
+
 **操作步骤：**
 
 1. 仍在 https://tcb.cloud.tencent.com/dev?envId=mgya-d8gg4dtm6a418a70b#/platform-run
@@ -53,18 +72,20 @@
 4. 服务名：`db`
 5. 容器端口：`5432`
 6. 实例规格：最小（0.25 核 / 0.5G，dev 阶段够用）
-7. **关键 - 环境变量**：
-   ```
-   POSTGRES_DB=kindergarten_math
-   POSTGRES_USER=postgres
-   POSTGRES_PASSWORD=【点击"随机生成"或自己填一个强密码，复制下来，下面要用】
-   ```
-8. **关键 - 持久卷**：在「存储」区域**添加文件存储**：
-   - 挂载路径：`/var/lib/postgresql/data`
-   - 大小：5 GB
-9. 点 **创建** → 等待「运行中」（约 1-2 分钟）
+7. **必填 - 环境变量**（**必须包含 POSTGRES_PASSWORD**，否则 pod 反复重启失败）：
+   - 点开"环境变量设置"折叠面板
+   - 加 3 条：
+     | Key | Value |
+     |---|---|
+     | `POSTGRES_DB` | `kindergarten_math` |
+     | `POSTGRES_USER` | `postgres` |
+     | `POSTGRES_PASSWORD` | **强密码**（如 `d409fc5d4c1463f9abeaf42a3f9ba9a54da7f5c804c35a8f` 或自己生成，保存好） |
+8. **持久卷（可选）**：评估期可跳过。如需保留数据：
+   - 评估期：**不勾存储挂载**，容器重建 = 数据丢失（可接受）
+   - 生产：勾选"存储挂载" → 选**"文件存储 CFS"**（不是 COS）→ 挂 `/var/lib/postgresql/data`
+9. 点 **部署** → 等待「运行中」（约 1-2 分钟）
 
-> 🔑 记住 `POSTGRES_PASSWORD` 的值，下面给 backend 用。
+> 🔑 记住 `POSTGRES_PASSWORD` 的值，下面给 backend 用 `postgresql+asyncpg://postgres:你的密码@db:5432/kindergarten_math`。
 > 验证：`db-5432.tcb-api.tencentcloud.com:5432` 在云托管内网互通，**不要用公网 IP**。
 
 ---
@@ -158,16 +179,18 @@
 
 1. **真实教师账号**：上面 `TEACHER_PASSWORD` 是审核测试账号，需要填真实强密码。**Dockerfile 里已经清空，不会泄漏**。
 2. **demo 账号被禁用**：内置的 `teacher@kindergarten.cn / demo123` 在生产环境（ENVIRONMENT=production）会被后端拒绝，避免弱口令后门。
-3. **PostgreSQL 持久卷**：必须挂！否则实例重建 = 数据全丢。
+3. **PostgreSQL 持久卷**：评估期可不挂（数据会丢）；生产要挂请选 **CFS 文件存储**（不是 COS，详见 §二坑 2）。
 4. **费用监控**：体验版基础配额较小，跑通后切正式版或随时看费用中心。
 5. **环境变量里的密码**：云托管控制台只会显示一次，**截屏保存**或复制到密码管理器。
 
 ---
 
-## 八、当前真实阻塞点（2026-08-03 状态）
+## 八、当前真实阻塞点（2026-08-04 实测状态）
 
-- [ ] mgya 环境 **启用云托管**（要做，但需要勾协议 + 余额或按量付费授权）
-- [ ] **创建 db 服务**（PostgreSQL + 持久卷）
+- [x] mgya 环境 **启用云托管** ✅（已完成）
+- [x] ~db 服务第 1 次创建（失败：COS 持久卷 I/O error）~
+- [x] ~db 服务第 2 次创建（失败：缺 POSTGRES_PASSWORD）~
+- [ ] **删除当前失败 db** + **重建 db**（填 POSTGRES_PASSWORD，**不挂持久卷**）
 - [ ] **创建 backend 服务**（上传代码 + 设环境变量）
 - [ ] **验证 backend 跑通**（curl）
 - [ ] 小程序**关联云开发环境** + 联调
