@@ -1278,7 +1278,9 @@ class WorksheetRecognizer:
         鉴权: Bearer <MINIMAX_API_KEY>
         模型: MiniMax-M3（多模态，文本 + 图像）
 
-        注意：需要 MiniMax 账号余额充足（否则返回 insufficient balance）。
+        注意：MiniMax-M3 是 token plan 计费（非按 API 调用计费），
+        有周限额——限额达到时返回 insufficient balance，
+        需等限额重置（或升级套餐）后继续调用。
         """
         data_url = f"data:image/png;base64,{base64_image}"
         return await self.client.chat.completions.create(

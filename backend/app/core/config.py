@@ -34,6 +34,7 @@ class Settings(BaseSettings):
     # ── MiniMax 官方服务（多模态，M3 支持图像输入） ────────────────────────
     # MiniMax 官方端点：https://api.MiniMax.chat/v1/text/chatcompletion_v2
     # 鉴权：HTTP Header "Authorization: Bearer <MINIMAX_API_KEY>"
+    # 计费：token plan（按 token 套餐），有周限额；限额达到返回 insufficient balance
     # 模型：
     #   - MiniMax-M3    多模态（文本 + 图像输入），视觉识别用这个
     #   - abab6.5s-chat 纯文本
