@@ -124,6 +124,13 @@ async def lifespan(app: FastAPI):
     except Exception as _e:
         logger.error(f"init_db failed (non-fatal): {type(_e).__name__}: {_e}", exc_info=True)
 
+    # 建专用 MySQL 用户（仅在 root 连接时执行；首次成功后将 DATABASE_URL 切到 mathsprout 用户）
+    try:
+        from app.core.init_db_user import ensure_db_user
+        await ensure_db_user()
+    except Exception as _e:
+        logger.warning(f"ensure_db_user skipped: {type(_e).__name__}: {_e}")
+
     # Seed demo data in development
     if settings.ENVIRONMENT == "development":
         try:
