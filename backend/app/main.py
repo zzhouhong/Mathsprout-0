@@ -112,6 +112,12 @@ async def lifespan(app: FastAPI):
     logger.info(f"🚀 {settings.APP_NAME} v{settings.APP_VERSION} starting...")
     logger.info(f"   Environment: {settings.ENVIRONMENT}")
     logger.info(f"   Upload dir: {settings.UPLOAD_DIR}")
+    # 冷启动恢复 SQLite 数据库（对象存储备份；无备份/未开启时静默跳过）
+    try:
+        from app.services.db_backup import restore_db_from_cos
+        await restore_db_from_cos()
+    except Exception as _e:
+        logger.warning(f"DB restore skipped: {type(_e).__name__}: {_e}")
     # init_db() 必须容错：失败不致命（服务仍可监听 8000 并响应健康检查）
     try:
         await init_db()  # Auto-create tables on startup
@@ -125,8 +131,23 @@ async def lifespan(app: FastAPI):
         except Exception as _e:
             logger.warning(f"seed_demo_children skipped: {_e}")
 
+    # 周期备份任务（仅 SQLite + 已配置对象存储时真正干活）
+    backup_task = None
+    try:
+        from app.services.db_backup import backup_loop
+        backup_task = asyncio.create_task(backup_loop())
+    except Exception as _e:
+        logger.warning(f"backup_loop skipped: {type(_e).__name__}: {_e}")
+
     yield
     # Shutdown
+    try:
+        from app.services.db_backup import backup_db_to_cos
+        await backup_db_to_cos()  # 关停前最后备份一次
+    except Exception as _e:
+        logger.warning(f"final backup failed: {type(_e).__name__}: {_e}")
+    if backup_task is not None:
+        backup_task.cancel()
     logger.info("👋 Shutting down...")
 
 

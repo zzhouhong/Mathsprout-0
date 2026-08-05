@@ -4,7 +4,7 @@ from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 
 from app.core.database import Base
-from app.models.enums import ReportTypeEnum
+from app.models.enums import ReportTypeEnum, enum_values_callable
 
 
 class Report(Base):
@@ -13,7 +13,10 @@ class Report(Base):
     id = Column(Integer, primary_key=True, autoincrement=True)
     child_id = Column(Integer, ForeignKey("children.id"), nullable=False)
     worksheet_id = Column(Integer, ForeignKey("worksheets.id"), nullable=True)
-    report_type = Column(SAEnum(ReportTypeEnum), nullable=False)
+    report_type = Column(
+        SAEnum(ReportTypeEnum, values_callable=enum_values_callable),
+        nullable=False,
+    )
     content_json = Column(JSON, nullable=False)
     teaching_reflections = Column(Text, nullable=True)
     family_activities = Column(Text, nullable=True)

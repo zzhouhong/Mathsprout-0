@@ -1,10 +1,12 @@
 from fastapi import APIRouter, UploadFile, File, Form, HTTPException, Query, Depends
 from fastapi.responses import JSONResponse, StreamingResponse
+from pydantic import BaseModel
 from pathlib import Path
 import uuid
 import os
 import json
 import asyncio
+import logging
 from typing import Optional
 
 from app.core.config import get_settings
@@ -27,6 +29,7 @@ from app.services.persistence_service import persist_analysis
 
 settings = get_settings()
 router = APIRouter()
+logger = logging.getLogger(__name__)
 
 # Initialize services
 _resolved_target_size = resolve_image_size(
@@ -498,24 +501,21 @@ def _sse(data: dict) -> str:
 
 # ─── Demo Endpoint ───────────────────────────────────────────────────
 
-@router.post("/demo")
-async def demo_analysis(
-    file: UploadFile = File(...),
-    age_group: AgeGroupEnum = Form(default=AgeGroupEnum.SMALL),
-    child_name: str = Form(default="小明"),
-    child_id: Optional[int] = Form(default=None, description="幼儿ID，提供则持久化到数据库"),
-    db = Depends(get_db),
-):
-    """
-    Demo endpoint: Full analysis pipeline on a single image.
-    This is the MVP core endpoint — upload + preprocess + recognize + assess + report.
+async def _run_analysis_pipeline(
+    image_bytes: bytes,
+    filename: str,
+    age_group: AgeGroupEnum,
+    child_name: str,
+    child_id: Optional[int],
+    db,
+) -> dict:
+    """完整分析流水线：预处理 → 识别 → 评估 → 报告 → 持久化。
 
-    If child_id is provided, results are persisted to the database and linked to the child.
+    供 /demo（multipart 直传）与 /cloud-analyze（云存储 fileID）共用。
     """
     # Step 1: Read and preprocess
-    image_bytes = await file.read()
     processed_image, processed_filename = await image_processor.process(
-        image_bytes, file.filename or "worksheet.jpg"
+        image_bytes, filename
     )
 
     # Step 2: Vision recognition
@@ -573,7 +573,7 @@ async def demo_analysis(
             persisted = await persist_analysis(
                 db=db,
                 child_id=child_id,
-                original_filename=file.filename or "worksheet.jpg",
+                original_filename=filename,
                 image_bytes=processed_image,
                 vision_result=vision_result,
                 assessment_result=assessment,
@@ -585,7 +585,78 @@ async def demo_analysis(
         except Exception as e:
             response_data["persist_error"] = str(e)
 
-    return JSONResponse(content=response_data)
+    return response_data
+
+
+@router.post("/demo")
+async def demo_analysis(
+    file: UploadFile = File(...),
+    age_group: AgeGroupEnum = Form(default=AgeGroupEnum.SMALL),
+    child_name: str = Form(default="小明"),
+    child_id: Optional[int] = Form(default=None, description="幼儿ID，提供则持久化到数据库"),
+    db = Depends(get_db),
+):
+    """
+    Demo endpoint: Full analysis pipeline on a single image.
+    This is the MVP core endpoint — upload + preprocess + recognize + assess + report.
+
+    If child_id is provided, results are persisted to the database and linked to the child.
+    """
+    image_bytes = await file.read()
+    return JSONResponse(
+        content=await _run_analysis_pipeline(
+            image_bytes,
+            file.filename or "worksheet.jpg",
+            age_group,
+            child_name,
+            child_id,
+            db,
+        )
+    )
+
+
+class CloudAnalyzeRequest(BaseModel):
+    """教师拍照 → 云存储 fileID → 后端读取分析（云托管通道）。"""
+    file_id: str = ""
+    file_url: Optional[str] = None
+    age_group: AgeGroupEnum = AgeGroupEnum.MIDDLE
+    child_name: str = "小朋友"
+    child_id: Optional[int] = None
+
+
+@router.post("/cloud-analyze")
+async def cloud_analyze(
+    payload: CloudAnalyzeRequest,
+    db = Depends(get_db),
+):
+    """云托管通道的照片分析：按 fileURL/fileID 读图，复用完整分析流水线。"""
+    from app.services.cloud_storage import download_file, download_url
+
+    try:
+        if payload.file_url:
+            image_bytes = await download_url(payload.file_url)
+        else:
+            image_bytes = await download_file(payload.file_id)
+    except Exception as e:
+        logger.warning(f"cloud-analyze: 读取对象存储失败 {e}")
+        return JSONResponse(
+            status_code=400,
+            content={
+                "error": True,
+                "detail": f"读取图片失败：{e}",
+            },
+        )
+
+    return JSONResponse(
+        content=await _run_analysis_pipeline(
+            image_bytes,
+            "cloud-worksheet.jpg",
+            payload.age_group,
+            payload.child_name,
+            payload.child_id,
+            db,
+        )
+    )
 
 
 # ─── Teacher Confirmation Endpoints ────────────────────────────────────

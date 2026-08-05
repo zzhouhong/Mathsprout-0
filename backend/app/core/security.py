@@ -56,8 +56,15 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
 # This happens once at startup, avoiding bcrypt compat issues
 
 def _build_demo_users() -> Dict[str, Dict[str, Any]]:
-    """Build demo users dict with pre-hashed passwords."""
-    return {
+    """Build demo users dict with pre-hashed passwords.
+
+    包含两类账号：
+    1. 内置 demo 账号（teacher@/admin@kindergarten.cn）—— 仅开发环境可用，
+       生产环境由 auth 路由主动拒绝，防止弱口令后门。
+    2. 正式教师账号 —— 由环境变量 TEACHER_EMAIL / TEACHER_PASSWORD 配置，
+       任何环境都可用，供真实用户与小程序审核使用。
+    """
+    users: Dict[str, Dict[str, Any]] = {
         "teacher@kindergarten.cn": {
             "id": 1,
             "email": "teacher@kindergarten.cn",
@@ -75,6 +82,24 @@ def _build_demo_users() -> Dict[str, Dict[str, Any]]:
         # Parent access is via access_code, not email/password
     }
 
+    teacher_email = (settings.TEACHER_EMAIL or "").strip().lower()
+    teacher_password = settings.TEACHER_PASSWORD or ""
+    if teacher_email and teacher_password:
+        users[teacher_email] = {
+            "id": 10,
+            "email": teacher_email,
+            "name": settings.TEACHER_NAME or "老师",
+            "role": "teacher",
+            "hashed_password": hash_password(teacher_password),
+        }
+
+    return users
+
+
+# 内置弱口令 demo 账号，生产环境须禁用（正式账号不在此列）
+BUILTIN_DEMO_EMAILS = frozenset(
+    {"teacher@kindergarten.cn", "admin@kindergarten.cn"}
+)
 
 DEMO_USERS = _build_demo_users()
 

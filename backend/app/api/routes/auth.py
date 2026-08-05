@@ -16,6 +16,7 @@ from app.core.database import get_db
 from app.models.child import Child
 from app.core.security import (
     DEMO_USERS,
+    BUILTIN_DEMO_EMAILS,
     verify_password,
     create_access_token,
     create_parent_token,
@@ -54,15 +55,21 @@ async def teacher_login(request: LoginRequest):
     Demo credentials (开发环境可用，生产环境自动禁用):
     - teacher@kindergarten.cn / demo123
     - admin@kindergarten.cn / admin123
+
+    正式账号通过环境变量 TEACHER_EMAIL / TEACHER_PASSWORD 配置，
+    任何环境均可登录。
     """
-    # 生产环境禁用硬编码 demo 账户，防止后门
-    if settings.ENVIRONMENT.lower() == "production" and request.email in DEMO_USERS:
+    email = (request.email or "").strip().lower()
+
+    # 生产环境禁用内置弱口令 demo 账户，防止后门。
+    # 环境变量配置的正式账号不受此限制。
+    if settings.ENVIRONMENT.lower() == "production" and email in BUILTIN_DEMO_EMAILS:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="该账户在生产环境不可用。",
         )
 
-    user = DEMO_USERS.get(request.email)
+    user = DEMO_USERS.get(email)
     if not user or not verify_password(request.password, user["hashed_password"]):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -71,7 +78,7 @@ async def teacher_login(request: LoginRequest):
 
     token = create_access_token(
         data={
-            "sub": request.email,
+            "sub": email,
             "user_id": user["id"],
             "name": user["name"],
             "role": user["role"],

@@ -4,7 +4,12 @@ from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 
 from app.core.database import Base
-from app.models.enums import WorksheetStatusEnum, UploadMethodEnum, CompletionContextEnum
+from app.models.enums import (
+    WorksheetStatusEnum,
+    UploadMethodEnum,
+    CompletionContextEnum,
+    enum_values_callable,
+)
 
 
 class Worksheet(Base):
@@ -14,9 +19,18 @@ class Worksheet(Base):
     child_id = Column(Integer, ForeignKey("children.id"), nullable=False)
     file_path = Column(String(500), nullable=False)
     original_filename = Column(String(255), nullable=True)
-    status = Column(SAEnum(WorksheetStatusEnum), default=WorksheetStatusEnum.UPLOADED)
-    upload_method = Column(SAEnum(UploadMethodEnum), nullable=False)
-    completion_context = Column(SAEnum(CompletionContextEnum), nullable=True)
+    status = Column(
+        SAEnum(WorksheetStatusEnum, values_callable=enum_values_callable),
+        default=WorksheetStatusEnum.UPLOADED,
+    )
+    upload_method = Column(
+        SAEnum(UploadMethodEnum, values_callable=enum_values_callable),
+        nullable=False,
+    )
+    completion_context = Column(
+        SAEnum(CompletionContextEnum, values_callable=enum_values_callable),
+        nullable=True,
+    )
     teacher_notes = Column(Text, nullable=True)
     created_at = Column(DateTime, server_default=func.now())
 

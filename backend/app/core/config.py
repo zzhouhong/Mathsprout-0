@@ -44,6 +44,24 @@ class Settings(BaseSettings):
     SECRET_KEY: str = "dev-secret-key-change-in-production"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 24 * 7  # 7 days
 
+    # 正式教师账号（通过环境变量配置，生产环境可用）
+    # 与内置 demo 账号不同：demo 账号在生产环境被禁用，此账号始终可用。
+    # 三项都留空时不创建该账号。
+    TEACHER_EMAIL: str = ""
+    TEACHER_PASSWORD: str = ""
+    TEACHER_NAME: str = "老师"
+
+    # 微信云托管对象存储（教师拍照上传中转，与 cloudbaserc.json 的 envId 配套）
+    # 存储桶名可从云托管控制台「对象存储」页或 tcb storage url 命令获得。
+    CLOUD_STORAGE_BUCKET: str = ""
+    CLOUD_STORAGE_REGION: str = "ap-shanghai"
+
+    # SQLite 持久化备份（对象存储兜底，仅 DATABASE_URL 为 sqlite 时生效）
+    # 需要云托管「开放接口服务」开启 + 微信令牌白名单放行 /_/cos/getauth、/_/cos/metaid/encode
+    DB_BACKUP_ENABLED: bool = True
+    DB_BACKUP_INTERVAL_SECONDS: int = 180
+    DB_BACKUP_KEY: str = "backup/mathsprout.db"
+
     # Rate Limiting
     RATE_LIMIT_AI_PER_MIN: int = 10     # AI endpoints (analysis/worksheets)
     RATE_LIMIT_AI_BURST: int = 10
