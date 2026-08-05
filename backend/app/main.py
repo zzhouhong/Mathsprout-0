@@ -309,6 +309,7 @@ def create_app() -> FastAPI:
     @app.get("/api/health")
     async def health_check():
         from app.core.database import check_db_connection
+        from app.services.worksheet_recognizer import _detect_provider
         db_ok = await check_db_connection()
         status = "ok" if db_ok else "degraded"
         return {
@@ -316,6 +317,10 @@ def create_app() -> FastAPI:
             "version": settings.APP_VERSION,
             "database": "connected" if db_ok else "disconnected",
             "environment": settings.ENVIRONMENT,
+            "vision_provider": _detect_provider(),
+            "vision_model": settings.VISION_MODEL,
+            "minimax_model": settings.MINIMAX_MODEL,
+            "minimax_configured": bool(settings.MINIMAX_API_KEY),
         }
 
     @app.get("/api/stats")
