@@ -307,6 +307,7 @@ def create_app() -> FastAPI:
         return {"status": "ok", "service": settings.APP_NAME, "version": settings.APP_VERSION}
 
     @app.get("/api/health")
+    @app.get("/api/v1/health")
     async def health_check():
         from app.core.database import check_db_connection
         from app.services.worksheet_recognizer import _detect_provider
