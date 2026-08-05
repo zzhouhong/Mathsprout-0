@@ -1236,7 +1236,7 @@ class WorksheetRecognizer:
         if self._provider == "anthropic":
             return await self._call_anthropic(system_prompt, base64_image, user_text)
         elif self._provider == "minimax":
-            return await self._call_minimax(system_prompt, user_text)
+            return await self._call_minimax(system_prompt, base64_image, user_text)
         else:
             return await self._call_openai_compatible(system_prompt, base64_image, user_text)
 
@@ -1247,8 +1247,8 @@ class WorksheetRecognizer:
         if self._provider == "anthropic":
             return await self._call_anthropic_dual(system_prompt, full_image_b64, cropped_image_b64, user_text)
         elif self._provider == "minimax":
-            # MiniMax 不支持图片（含双图），明确报错
-            return await self._call_minimax(system_prompt, user_text)
+            # MiniMax-M3 多模态：双图用第一张（全图）为主
+            return await self._call_minimax(system_prompt, full_image_b64, user_text)
         else:
             return await self._call_openai_compatible_dual(system_prompt, full_image_b64, cropped_image_b64, user_text)
 
@@ -1270,21 +1270,28 @@ class WorksheetRecognizer:
         )
 
     async def _call_minimax(
-        self, system_prompt: str, user_text: str
+        self, system_prompt: str, base64_image: str, user_text: str
     ) -> Any:
-        """MiniMax 官方 API 调用（仅文本）。
-
-        MiniMax（api.MiniMax.chat）当前只提供文本模型（abab 系列），
-        **不支持图片输入**。本方法仅在纯文本任务下可用；
-        任何视觉（图片）识别请求都会在此明确报错，避免静默失败。
+        """MiniMax 官方 API 调用（多模态，MiniMax-M3 支持图像输入）。
 
         端点: {settings.MINIMAX_BASE_URL}/v1/text/chatcompletion_v2
         鉴权: Bearer <MINIMAX_API_KEY>
+        模型: MiniMax-M3（多模态，文本 + 图像）
+
+        注意：需要 MiniMax 账号余额充足（否则返回 insufficient balance）。
         """
-        raise RuntimeError(
-            "MiniMax（api.MiniMax.chat）不支持图片输入（abab 系列仅文本）。"
-            "拍照识别请使用 VISION_PROVIDER=qwen（qwen-vl-max）或 claude；"
-            "MiniMax 仅适用于纯文本任务（如报告润色）。"
+        data_url = f"data:image/png;base64,{base64_image}"
+        return await self.client.chat.completions.create(
+            model=self.model,
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": [
+                    {"type": "image_url", "image_url": {"url": data_url}},
+                    {"type": "text", "text": user_text},
+                ]},
+            ],
+            max_tokens=settings.MINIMAX_MAX_TOKENS,
+            timeout=settings.MINIMAX_TIMEOUT_SECONDS,
         )
 
     async def _call_openai_compatible(

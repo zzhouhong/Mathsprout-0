@@ -31,13 +31,15 @@ class Settings(BaseSettings):
     VISION_PROVIDER: str = ""
     OFFLINE_RESULTS_DIR: str = "./tests/images/golden"  # offline provider 读取预存识别结果的目录
 
-    # ── MiniMax 官方服务（文本） ──────────────────────────────────────────
+    # ── MiniMax 官方服务（多模态，M3 支持图像输入） ────────────────────────
     # MiniMax 官方端点：https://api.MiniMax.chat/v1/text/chatcompletion_v2
     # 鉴权：HTTP Header "Authorization: Bearer <MINIMAX_API_KEY>"
-    # 模型：abab6.5s-chat / abab6.5-chat / abab5.5-chat
+    # 模型：
+    #   - MiniMax-M3    多模态（文本 + 图像输入），视觉识别用这个
+    #   - abab6.5s-chat 纯文本
     MINIMAX_API_KEY: str = ""
     MINIMAX_BASE_URL: str = "https://api.MiniMax.chat"
-    MINIMAX_MODEL: str = "abab6.5s-chat"
+    MINIMAX_MODEL: str = "MiniMax-M3"
     MINIMAX_MAX_TOKENS: int = 2048
     MINIMAX_TIMEOUT_SECONDS: int = 60
 
