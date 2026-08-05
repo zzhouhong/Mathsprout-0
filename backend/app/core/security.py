@@ -58,11 +58,12 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
 def _build_demo_users() -> Dict[str, Dict[str, Any]]:
     """Build demo users dict with pre-hashed passwords.
 
-    包含两类账号：
+    包含三类账号：
     1. 内置 demo 账号（teacher@/admin@kindergarten.cn）—— 仅开发环境可用，
        生产环境由 auth 路由主动拒绝，防止弱口令后门。
     2. 正式教师账号 —— 由环境变量 TEACHER_EMAIL / TEACHER_PASSWORD 配置，
        任何环境都可用，供真实用户与小程序审核使用。
+    3. 公共简单账号（admin/admin）—— 任何环境都可用，方便体验/演示。
     """
     users: Dict[str, Dict[str, Any]] = {
         "teacher@kindergarten.cn": {
@@ -78,6 +79,14 @@ def _build_demo_users() -> Dict[str, Dict[str, Any]]:
             "name": "管理员",
             "role": "admin",
             "hashed_password": hash_password("admin123"),
+        },
+        # 公共简单账号（admin/admin）—— 任何环境可用，方便体验/演示
+        "admin": {
+            "id": 3,
+            "email": "admin",
+            "name": "公共管理员",
+            "role": "admin",
+            "hashed_password": hash_password("admin"),
         },
         # Parent access is via access_code, not email/password
     }
