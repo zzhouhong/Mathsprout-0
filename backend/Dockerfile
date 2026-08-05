@@ -12,15 +12,20 @@ COPY . .
 # 云托管 Pod 内 /tmp 与 /var/lib 都保证可写；用 /var/lib/mathsprout 作为根
 RUN mkdir -p /var/lib/mathsprout/data /var/lib/mathsprout/uploads /var/lib/mathsprout/reports /var/lib/mathsprout/cache
 # 云端默认配置：自包含 SQLite 数据库 + 离线 AI 识别，零外部依赖。
-# 如需真实识别/持久化数据库，可在云托管控制台用环境变量覆盖以下值：
-#   DATABASE_URL / DATABASE_URL_SYNC → 例如 postgresql+asyncpg://...
-#   VISION_PROVIDER → 例如 qwen（需配合 VISION_API_KEY）
+# ⚠️ 注：cloudbaserc.json 的 envVariables 经实测不被 tcb cloudrun deploy 注入
+#    （CLI 3.7.1 bug），因此生产关键配置直接写进镜像 ENV（必然生效）。
+#    如需在云托管控制台覆盖，环境变量优先级高于镜像 ENV。
 ENV DATABASE_URL=sqlite+aiosqlite:////var/lib/mathsprout/data/mathsprout.db \
     DATABASE_URL_SYNC=sqlite:////var/lib/mathsprout/data/mathsprout.db \
     VISION_PROVIDER=offline \
     UPLOAD_DIR=/var/lib/mathsprout/uploads \
     REPORT_DIR=/var/lib/mathsprout/reports \
-    ENVIRONMENT=production
+    ENVIRONMENT=production \
+    MINIMAX_API_KEY= \
+    MINIMAX_BASE_URL=https://api.MiniMax.chat \
+    MINIMAX_MODEL=MiniMax-M3 \
+    MINIMAX_MAX_TOKENS=2048 \
+    MINIMAX_TIMEOUT_SECONDS=60
 # 正式教师账号（小程序审核测试账号，生产可登录）。
 # ⚠️ 安全：密码绝不能写入镜像——任何人 docker history 都能看到。
 # 只在这里放 EMAIL/NAME 占位；TEACHER_PASSWORD 必须且只能在云托管控制台环境变量注入。
