@@ -13,6 +13,7 @@ import asyncio
 import base64
 import hashlib
 import io
+import os
 import cv2
 import numpy as np
 from typing import Optional, Dict, Any, Union, List, Tuple
@@ -760,8 +761,19 @@ class WorksheetRecognizer:
             # MiniMax 官方服务：仅文本模型（abab 系列），不支持图片输入。
             # 视觉识别请求会走 _call_minimax → 明确抛错；文本任务可用。
             self._provider = "minimax"
+            # 用 os.environ 直读环境变量（避免 settings 缓存导致 Key 为空）
+            minimax_key = (
+                os.environ.get("MINIMAX_API_KEY")
+                or settings.MINIMAX_API_KEY
+                or settings.VISION_API_KEY
+            )
+            if not minimax_key:
+                raise RuntimeError(
+                    "VISION_PROVIDER=minimax 但 MINIMAX_API_KEY 未设置。"
+                    "请在 Dockerfile 或云托管 envVariables 注入。"
+                )
             self.client = AsyncOpenAI(
-                api_key=settings.MINIMAX_API_KEY or settings.VISION_API_KEY,
+                api_key=minimax_key,
                 base_url=f"{settings.MINIMAX_BASE_URL}/v1",
             )
             self.model = settings.MINIMAX_MODEL
