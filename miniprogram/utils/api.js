@@ -113,18 +113,79 @@ function request(path, options = {}) {
 /**
  * 文件上传（教师拍照分析）
  *
- * 注意：云托管通道暂不支持 multipart 文件直传。useCloud=true 时，
- * 需先改造为「wx.cloud.uploadFile 上传云存储 → 后端按 fileID 取文件分析」，
- * 该改造属于部署阶段任务；此处先给出友好提示，避免教师端直接崩溃。
+ * 云托管通道（useCloud=true）：
+ *   1) wx.cloud.uploadFile 把图片传到对象存储，拿到 fileID
+ *   2) wx.cloud.getTempFileURL 拿临时访问链接（callContainer 请求体上限 100K，不能直传图片）
+ *   3) 后端 POST /worksheets/cloud-analyze 下载临时链接并跑完整分析流水线
+ * 本地调试通道（useCloud=false）：走 wx.uploadFile 直传后端。
  */
 function uploadFile(path, filePath, formData = {}) {
   if (app.globalData.useCloud) {
-    wx.showToast({
-      title: "云托管文件上传待部署后开启",
-      icon: "none",
-      duration: 2500,
+    wx.showLoading({ title: "分析中...", mask: true });
+    return new Promise((resolve, reject) => {
+      const extMatch = filePath.match(/\.[^.]+$/) || [".jpg"];
+      const cloudPath =
+        "uploads/" +
+        Date.now() +
+        "-" +
+        Math.random().toString(36).slice(2, 10) +
+        extMatch[0];
+
+      wx.cloud.uploadFile({
+        cloudPath,
+        filePath,
+        config: { env: app.globalData.cloudEnv },
+        success: (res) => {
+          // 拿临时访问链接交给后端（callContainer 请求体上限 100K，不能直传图片；
+          // 临时链接 *.tcb.qcloud.la 可被后端直接读取，绕开「开放接口服务」开关）
+          wx.cloud.getTempFileURL({
+            fileList: [res.fileID],
+            config: { env: app.globalData.cloudEnv },
+            success: (urlRes) => {
+              const fileUrl = urlRes.fileList && urlRes.fileList[0] && urlRes.fileList[0].tempFileURL;
+              if (!fileUrl) {
+                wx.hideLoading();
+                wx.showToast({ title: "获取图片链接失败", icon: "none", duration: 2500 });
+                reject({ message: "get-temp-url-failed" });
+                return;
+              }
+              request("/worksheets/cloud-analyze", {
+                method: "POST",
+                auth: true,
+                showLoading: false,
+                data: {
+                  file_id: res.fileID,
+                  file_url: fileUrl,
+                  age_group: formData.age_group || "middle",
+                  child_name: formData.child_name || "小朋友",
+                  child_id: formData.child_id || null,
+                },
+              })
+                .then((data) => {
+                  wx.hideLoading();
+                  resolve(data);
+                })
+                .catch((err) => {
+                  wx.hideLoading();
+                  reject(err);
+                });
+            },
+            fail: (urlErr) => {
+              wx.hideLoading();
+              const msg = urlErr.errMsg || "获取图片链接失败";
+              wx.showToast({ title: msg, icon: "none", duration: 2500 });
+              reject({ message: msg });
+            },
+          });
+        },
+        fail: (err) => {
+          wx.hideLoading();
+          const msg = err.errMsg || "图片上传失败，请重试";
+          wx.showToast({ title: msg, icon: "none", duration: 2500 });
+          reject({ message: msg });
+        },
+      });
     });
-    return Promise.reject({ message: "cloud-upload-not-ready" });
   }
 
   wx.showLoading({ title: "分析中...", mask: true });

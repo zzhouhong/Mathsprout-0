@@ -19,7 +19,9 @@
       "ENVIRONMENT": "production",
       "TEACHER_EMAIL": "ujvush@dingtalk.com",
       "TEACHER_PASSWORD": "pRyEEtueuwXqHf",
-      "TEACHER_NAME": "崔老师"
+      "TEACHER_NAME": "崔老师",
+      "CLOUD_STORAGE_BUCKET": "7072-prod-d6gj3mfkye02c4455-1462714319",
+      "CLOUD_STORAGE_REGION": "ap-shanghai"
     },
     "isPublic": true
   }

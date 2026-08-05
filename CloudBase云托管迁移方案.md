@@ -156,12 +156,20 @@ async function uploadImageToCloud(filePath) {
 
 > 如果暂时不想动上传逻辑，也可以让后端容器继续接收 `wx.cloud.callContainer` 传的文件——容器能正常收 multipart。两条都行，按需选。
 
+> ✅ 已落地（2026-08-04）：教师端拍照走 `wx.cloud.uploadFile` → `wx.cloud.getTempFileURL`
+> 拿临时链接 → `POST /api/v1/worksheets/cloud-analyze`（后端 `httpx` 下载后复用完整分析流水线）。
+> 因为 `callContainer` 请求体上限 100K，图片不能走 JSON 直传；临时链接方案
+> **不需要开启「开放接口服务」**（COS-SDK + `/_/cos/getauth` 方案留作后续备用，
+> 后端 `cloud_storage.py` 已实现，需控制台开启开关后版本重建才生效）。
+
 ---
 
 ## 六、步骤 4：联调与上线
 
 1. 开发者工具里「云开发」→ 确认 backend 服务「运行中」，点开「测试」能调到 `/api/v1/health`
-2. 小程序编译，首页输 `XIAOMING01` 绑定测试（走的是云托管，不是本机）
+2. 小程序编译，首页输生产环境真实访问码绑定测试（走的是云托管，不是本机）：
+   `1923BF95`（测试幼儿）或 `7C7427EB`（测试宝宝）；`XIAOMING01` 等演示码只在
+   development 环境播种，生产环境返回「访问码无效」。
 3. 真机预览 / 体验版测试
 4. 微信公众平台 → 版本管理 → 上传代码 → 提交审核 → 发布
    - 此时**仍要小程序备案通过**（管局审核中→通过）
@@ -249,3 +257,71 @@ GET  /api/v1/parent/latest-report → 正常返回 ✅
 - [ ] 浏览器 UI 对 prod 环境报"环境不存在"（登录态/权限问题，不影响 CLI）
 - [ ] envVariables 注入机制待修复（当前靠 Dockerfile ENV 兜底）
 - [ ] mgya 体验版环境可删（已无服务）
+
+---
+
+## 附二：数据持久化方案（2026-08-05 定案）
+
+### 结论：微信云托管不支持 CFS 挂载，方案 A 不可行
+
+排查证据：
+1. 微信云托管官方操作指南只提供 **MySQL / 对象存储 / 静态资源存储**，没有「存储挂载 / 文件系统(CFS)」；
+2. 服务管理控制台 5 个 TAB（部署发布、云端调试、服务日志、资源监控、服务设置）无任何存储挂载入口；
+3. TCBR API 存在 `VolumesConf` 字段，但本账号无 CAM 权限创建 CFS（`cfs:DescribeCfsFileSystems` 未授权），
+   且微信云托管环境也没有创建 CFS 的控制台入口——「挂 CFS 让 SQLite 持久化」这条路走不通。
+
+### 两条可行路线（二选一）
+
+| 路线 | 持久化程度 | 你需要做的 | 状态 |
+|------|-----------|-----------|------|
+| **A. 微信云托管 MySQL（推荐）** | 真正持久化，官方 Serverless 数据库 | 控制台 → MySQL → 开通（输密码）→ 把内网地址/账号给我 | 后端已加 `asyncmy` 驱动，镜像已就绪，就差接线 |
+| **B. 对象存储备份 SQLite（过渡）** | 每 3 分钟 + 关停前备份，冷启动自动恢复；多实例同时写有极小覆盖风险 | 服务管理 → 云调用 → 开「开放接口服务」+ 微信令牌白名单加两个路径 | **代码已上线 backend-031**，翻开关即生效 |
+
+### 路线 B 的开关（1 分钟搞定，已随 backend-031 生效）
+
+1. 微信云托管控制台 → 服务管理 → backend → **云调用** → 开启「**开放接口服务**」；
+2. 同一页「微信令牌配置」白名单添加：
+   - `/_/cos/getauth`
+   - `/_/cos/metaid/encode`
+3. 无需重新部署：后端每 180s 自动把 `/var/lib/mathsprout/data/mathsprout.db`
+   备份到对象存储 `backup/mathsprout.db`，容器冷启动时自动恢复。
+
+验证方法：开完开关后等 5 分钟，用管理端/CLI 看对象存储里应出现 `backup/mathsprout.db`；
+之后任何一次重部署/缩容，幼儿和报告数据都会保留。
+
+### 路线 A 的接线（你开通后我 5 分钟完成）
+
+1. 控制台 → MySQL → 开通（选 5.7 或 8.0，记下密码）；
+2. 把「数据库信息」页的**内网地址/端口**和账号密码发我；
+3. 我改环境变量：
+   ```
+   DATABASE_URL=mysql+asyncmy://账号:密码@内网地址:3306/mathsprout?charset=utf8mb4
+   ```
+4. 重灌环境变量（镜像已含 asyncmy，无需重新构建）→ 重启验证。
+
+⚠️ MySQL 迁移注意事项（后端代码已排查）：
+- ORM 枚举列默认存**成员名（大写）**，但部分接口用 `.value`（小写）写入——现有 SQLite 里两种值混杂；
+  MySQL 原生 ENUM 只认其中一种，迁移前需给枚举列加 `values_callable=lambda e: [m.value for m in e]`
+  并归一化存量数据（工作量约 30 分钟，迁移时我来处理）。
+- 表结构由 `init_db()` 启动时自动创建（`create_all`），无需手写建表 SQL。
+
+### 部署/恢复命令备忘（2026-08-05 实测）
+
+```bash
+# 1. 构建新镜像（灰度，避免交互卡住）
+tcb cloudrun deploy -e prod-d6gj3mfkye02c4455 -s backend --port 8000 --source ./backend --force --traffic
+
+# 2. 若灰度任务卡在 GrayRelease（镜像大拉取慢），取消后全量切换：
+tcb api tcbr OperateServerManage --api-version 2022-02-17 \
+  --body '{"EnvId":"prod-d6gj3mfkye02c4455","ServerName":"backend","OperateType":"cancel","TaskId":<任务ID>}'
+
+# 3. 全量发布 + 重灌环境变量（ReleaseType 必填）
+tcb api tcbr UpdateCloudRunServer --api-version 2022-02-17 --body '{
+  "EnvId":"prod-d6gj3mfkye02c4455","ServerName":"backend",
+  "DeployInfo":{"DeployType":"image","ImageUrl":"ccr.ccs.tencentyun.com/tcb-100051286939-kiph/ca-xgkrzbge_backend:<新镜像tag>","ReleaseType":"FULL"},
+  "Items":[{"Key":"EnvParam","Value":"{\"ENVIRONMENT\":\"production\",\"TEACHER_EMAIL\":\"ujvush@dingtalk.com\",\"TEACHER_PASSWORD\":\"<密码>\",\"TEACHER_NAME\":\"崔老师\",\"CLOUD_STORAGE_BUCKET\":\"7072-prod-d6gj3mfkye02c4455-1462714319\",\"CLOUD_STORAGE_REGION\":\"ap-shanghai\"}"}]
+}'
+```
+
+> 注：CLI 3.7.1 的 `tcb cloudrun deploy` 本次实测**保留了**服务级环境变量（合并了旧 EnvParams），
+> 但为稳妥仍建议发布后核一遍 `DescribeCloudRunServerDetail` 里的 `EnvParams`。
