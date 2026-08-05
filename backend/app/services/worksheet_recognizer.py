@@ -62,7 +62,7 @@ def _detect_provider() -> str:
     """Detect the vision provider.
 
     Priority:
-      1. Explicit VISION_PROVIDER setting (e.g. "offline")
+      1. Explicit VISION_PROVIDER setting (e.g. "offline", "minimax")
       2. Auto-detect from VISION_BASE_URL ("anthropic.com"/"claude" → anthropic)
       3. Fallback to OpenAI-compatible
     """
@@ -72,6 +72,8 @@ def _detect_provider() -> str:
     base = (settings.VISION_BASE_URL or "").lower()
     if "anthropic.com" in base or "claude" in base:
         return "anthropic"
+    if "minimax" in base:
+        return "minimax"
     return "openai_compatible"
 
 
@@ -754,6 +756,15 @@ class WorksheetRecognizer:
                 api_key=settings.VISION_API_KEY,
                 base_url=settings.VISION_BASE_URL or None,
             )
+        elif provider == "minimax":
+            # MiniMax 官方服务：仅文本模型（abab 系列），不支持图片输入。
+            # 视觉识别请求会走 _call_minimax → 明确抛错；文本任务可用。
+            self._provider = "minimax"
+            self.client = AsyncOpenAI(
+                api_key=settings.MINIMAX_API_KEY or settings.VISION_API_KEY,
+                base_url=f"{settings.MINIMAX_BASE_URL}/v1",
+            )
+            self.model = settings.MINIMAX_MODEL
         else:
             self._provider = "openai_compatible"
             self.client = AsyncOpenAI(
@@ -1224,6 +1235,8 @@ class WorksheetRecognizer:
         """Dispatch to provider-specific implementation."""
         if self._provider == "anthropic":
             return await self._call_anthropic(system_prompt, base64_image, user_text)
+        elif self._provider == "minimax":
+            return await self._call_minimax(system_prompt, user_text)
         else:
             return await self._call_openai_compatible(system_prompt, base64_image, user_text)
 
@@ -1233,6 +1246,9 @@ class WorksheetRecognizer:
         """Dispatch dual-image call to provider-specific implementation."""
         if self._provider == "anthropic":
             return await self._call_anthropic_dual(system_prompt, full_image_b64, cropped_image_b64, user_text)
+        elif self._provider == "minimax":
+            # MiniMax 不支持图片（含双图），明确报错
+            return await self._call_minimax(system_prompt, user_text)
         else:
             return await self._call_openai_compatible_dual(system_prompt, full_image_b64, cropped_image_b64, user_text)
 
@@ -1251,6 +1267,24 @@ class WorksheetRecognizer:
                     {"type": "text", "text": user_text},
                 ],
             }],
+        )
+
+    async def _call_minimax(
+        self, system_prompt: str, user_text: str
+    ) -> Any:
+        """MiniMax 官方 API 调用（仅文本）。
+
+        MiniMax（api.MiniMax.chat）当前只提供文本模型（abab 系列），
+        **不支持图片输入**。本方法仅在纯文本任务下可用；
+        任何视觉（图片）识别请求都会在此明确报错，避免静默失败。
+
+        端点: {settings.MINIMAX_BASE_URL}/v1/text/chatcompletion_v2
+        鉴权: Bearer <MINIMAX_API_KEY>
+        """
+        raise RuntimeError(
+            "MiniMax（api.MiniMax.chat）不支持图片输入（abab 系列仅文本）。"
+            "拍照识别请使用 VISION_PROVIDER=qwen（qwen-vl-max）或 claude；"
+            "MiniMax 仅适用于纯文本任务（如报告润色）。"
         )
 
     async def _call_openai_compatible(

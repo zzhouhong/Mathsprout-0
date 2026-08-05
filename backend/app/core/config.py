@@ -13,9 +13,11 @@ class Settings(BaseSettings):
     DATABASE_URL: str = "postgresql+asyncpg://postgres:postgres@localhost:5432/mathsprout"
     DATABASE_URL_SYNC: str = "postgresql+psycopg2://postgres:postgres@localhost:5432/mathsprout"
 
-    # LLM Vision API — 支持 Anthropic Claude（原生）和 OpenAI 兼容提供商
+    # LLM Vision API — 支持 Anthropic Claude（原生）、OpenAI 兼容提供商、MiniMax（文本）
     # 提供商自动检测：base_url 含 "anthropic.com" → Anthropic SDK，否则 → OpenAI SDK
     # ⚠️ 使用 VISION_ 前缀避免与 Claude Code 注入的 ANTHROPIC_* 环境变量冲突
+    # ⚠️ MiniMax（api.MiniMax.chat）仅提供文本模型（abab 系列），不支持图片输入；
+    #    视觉识别请使用 qwen-vl-max（默认）或 Claude；MiniMax 用于文本任务（如报告润色）。
     VISION_API_KEY: str = ""
     VISION_MODEL: str = "qwen-vl-max"
     VISION_BASE_URL: str = "https://dashscope.aliyuncs.com/compatible-mode/v1"
@@ -23,9 +25,21 @@ class Settings(BaseSettings):
     VISION_CACHE_ENABLED: bool = True
     VISION_TIMEOUT_SECONDS: int = 60  # API 调用超时
     # 显式指定视觉提供商：留空则按 VISION_BASE_URL 自动检测（含 anthropic.com/claude → anthropic，否则 openai 兼容）
-    # 设为 "offline" 时走离线模式：从 OFFLINE_RESULTS_DIR 按图片哈希读取预存识别结果，零 API 依赖
+    # 可选值：offline | anthropic | openai_compatible | minimax
+    #   - "offline" 走离线模式：从 OFFLINE_RESULTS_DIR 按图片哈希读取预存识别结果，零 API 依赖
+    #   - "minimax" 走 MiniMax 官方 API（api.MiniMax.chat），仅文本能力；图片识别会明确报错
     VISION_PROVIDER: str = ""
     OFFLINE_RESULTS_DIR: str = "./tests/images/golden"  # offline provider 读取预存识别结果的目录
+
+    # ── MiniMax 官方服务（文本） ──────────────────────────────────────────
+    # MiniMax 官方端点：https://api.MiniMax.chat/v1/text/chatcompletion_v2
+    # 鉴权：HTTP Header "Authorization: Bearer <MINIMAX_API_KEY>"
+    # 模型：abab6.5s-chat / abab6.5-chat / abab5.5-chat
+    MINIMAX_API_KEY: str = ""
+    MINIMAX_BASE_URL: str = "https://api.MiniMax.chat"
+    MINIMAX_MODEL: str = "abab6.5s-chat"
+    MINIMAX_MAX_TOKENS: int = 2048
+    MINIMAX_TIMEOUT_SECONDS: int = 60
 
     # Image Processing
     IMAGE_MAX_SIZE_PX: int = 2048
