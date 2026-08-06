@@ -1295,18 +1295,38 @@ class WorksheetRecognizer:
         需等限额重置（或升级套餐）后继续调用。
         """
         data_url = f"data:image/png;base64,{base64_image}"
-        return await self.client.chat.completions.create(
-            model=self.model,
-            messages=[
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": [
-                    {"type": "image_url", "image_url": {"url": data_url}},
-                    {"type": "text", "text": user_text},
-                ]},
-            ],
-            max_tokens=settings.MINIMAX_MAX_TOKENS,
-            timeout=settings.MINIMAX_TIMEOUT_SECONDS,
-        )
+        try:
+            resp = await self.client.chat.completions.create(
+                model=self.model,
+                messages=[
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": [
+                        {"type": "image_url", "image_url": {"url": data_url}},
+                        {"type": "text", "text": user_text},
+                    ]},
+                ],
+                max_tokens=settings.MINIMAX_MAX_TOKENS,
+                timeout=settings.MINIMAX_TIMEOUT_SECONDS,
+            )
+        except Exception as e:
+            # MiniMax token plan 配额不足（1008）不是暂时性错误，快速失败不重试
+            err_str = str(e)
+            if "1008" in err_str or "insufficient balance" in err_str.lower():
+                raise RuntimeError(
+                    "MiniMax token plan 配额不足（1008 insufficient balance）。"
+                    "这是周限额，需等待限额重置或升级套餐后再试。"
+                ) from e
+            raise
+        # 二次确认：HTTP 200 但 base_resp.status_code=1008（配额不足）
+        raw = getattr(resp, "model_extra", None) or {}
+        base_resp = raw.get("base_resp") or {}
+        status_code = base_resp.get("status_code")
+        if status_code == 1008:
+            raise RuntimeError(
+                "MiniMax token plan 配额不足（1008 insufficient balance）。"
+                "这是周限额，需等待限额重置或升级套餐后再试。"
+            )
+        return resp
 
     async def _call_openai_compatible(
         self, system_prompt: str, base64_image: str, user_text: str
