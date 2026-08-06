@@ -916,12 +916,18 @@ async def generate_worksheet_endpoint(
         return HTMLResponse(content=html)
     elif format == "pdf":
         from fastapi.responses import Response
+        from urllib.parse import quote
         pdf_bytes = worksheet_to_pdf(worksheet)
+        # header 只允许 latin-1，中文文件名必须走 RFC 5987 filename*（UTF-8 编码）
         filename = "worksheet_" + worksheet.child_name + ".pdf"
         return Response(
             content=pdf_bytes,
             media_type="application/pdf",
-            headers={"Content-Disposition": 'attachment; filename="' + filename + '"'},
+            headers={
+                "Content-Disposition":
+                    'attachment; filename="worksheet.pdf"; filename*=UTF-8\'\''
+                    + quote(filename),
+            },
         )
     elif format == "markdown":
         md = worksheet_to_markdown(worksheet)
