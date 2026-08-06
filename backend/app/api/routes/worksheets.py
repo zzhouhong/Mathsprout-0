@@ -876,6 +876,7 @@ async def generate_worksheet_endpoint(
         generate_worksheet,
         worksheet_to_html,
         worksheet_to_markdown,
+        worksheet_to_pdf,
         WorksheetConfig,
     )
     from app.services.memory_service import build_child_memory, recommend_difficulty
@@ -913,6 +914,15 @@ async def generate_worksheet_endpoint(
     if format == "html":
         html = worksheet_to_html(worksheet)
         return HTMLResponse(content=html)
+    elif format == "pdf":
+        from fastapi.responses import Response
+        pdf_bytes = worksheet_to_pdf(worksheet)
+        filename = "worksheet_" + worksheet.child_name + ".pdf"
+        return Response(
+            content=pdf_bytes,
+            media_type="application/pdf",
+            headers={"Content-Disposition": 'attachment; filename="' + filename + '"'},
+        )
     elif format == "markdown":
         md = worksheet_to_markdown(worksheet)
         return JSONResponse(content={"markdown": md, "answer_key": worksheet.answer_key})

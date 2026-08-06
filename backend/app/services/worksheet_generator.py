@@ -931,3 +931,151 @@ def worksheet_to_html(worksheet: GeneratedWorksheet) -> str:
   <div class="mascot-footer">🌱 萌芽助手 Mathsprout · 陪伴每一次成长</div>
 </body>
 </html>"""
+
+
+# ─── PDF Export ──────────────────────────────────────────────────────
+
+def _pdf_clean_text(text: str) -> str:
+    """PDF 文本清洗：只保留子集字体有字形的字符（ASCII / CJK / 常用标点 / 白名单符号），
+    剥离 emoji 与生僻符号（否则渲染成缺字方块）。"""
+    if not text:
+        return ""
+    keep = set("★☆○●◆◇□■▲△→←↑↓①②③④⑤⑥⑦⑧⑨⑩")
+    out = []
+    for c in text:
+        o = ord(c)
+        if o < 0x2000:                      # ASCII 区（含 ×÷ — … 等）
+            out.append(c)
+        elif c in keep:
+            out.append(c)
+        elif 0x4E00 <= o <= 0x9FFF:         # CJK 汉字
+            out.append(c)
+        elif 0x3000 <= o <= 0x303F:         # CJK 标点（，。！？；：、（））
+            out.append(c)
+        elif 0xFF00 <= o <= 0xFFEF:         # 全角形式（数字/字母）
+            out.append(c)
+        elif 0x2010 <= o <= 0x2027 or 0x2030 <= o <= 0x205E:
+            out.append(c)                   # 通用标点（… 等）
+        # 其余（emoji/装饰符号/生僻字）丢弃
+    return "".join(out)
+
+
+def _pdf_font_name():
+    """注册并返回 PDF 正文字体名：优先嵌入「霞鹜文楷」子集 TTF（backend/fonts/），
+    文件缺失时回退 ReportLab 内置 CID 字体 STSong-Light（不嵌入字形，仅应急）。"""
+    import os
+    from reportlab.pdfbase import pdfmetrics
+    from reportlab.pdfbase.ttfonts import TTFont
+    font_dir = os.path.join(
+        os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
+        "fonts",
+    )
+    font_file = os.path.join(font_dir, "LXGWWenKai-Regular.subset.ttf")
+    if os.path.isfile(font_file):
+        try:
+            pdfmetrics.registerFont(TTFont("LXGWKai", font_file))
+            return "LXGWKai"
+        except Exception:
+            pass  # 注册失败则回退
+    from reportlab.pdfbase.cidfonts import UnicodeCIDFont
+    try:
+        pdfmetrics.registerFont(UnicodeCIDFont("STSong-Light"))
+    except Exception:
+        pass
+    return "STSong-Light"
+
+
+
+def worksheet_to_pdf(worksheet: "GeneratedWorksheet") -> bytes:
+    """Render a generated worksheet to A4 PDF bytes (ReportLab).
+
+    与 worksheet_to_html 同源：标题 / 操作说明 / 每题（题目文本 + 答案）/
+    答案区 / 完成奖励区。中文字体优先嵌入「霞鹜文楷」子集 TTF（backend/fonts/，
+    已子集化 ~1.8MB，任何设备都能正确显示）；字体文件缺失时回退内置
+    STSong-Light（CID 字体不嵌入字形，部分设备可能显示乱码）。
+    """
+    from reportlab.lib.pagesizes import A4
+    from reportlab.lib.units import mm
+    from reportlab.lib import colors
+    from reportlab.lib.styles import ParagraphStyle
+    from reportlab.platypus import (
+        SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle,
+        Preformatted, KeepTogether,
+    )
+    import io
+
+    FONT = _pdf_font_name()
+
+    buf = io.BytesIO()
+    doc = SimpleDocTemplate(
+        buf, pagesize=A4,
+        leftMargin=16 * mm, rightMargin=16 * mm,
+        topMargin=14 * mm, bottomMargin=14 * mm,
+        title=worksheet.child_name + " 数学操作单",
+        author="萌芽助手 Mathsprout",
+    )
+
+    s_title = ParagraphStyle("t", fontName=FONT, fontSize=22, leading=28,
+                             alignment=1, spaceAfter=6)
+    s_sub = ParagraphStyle("s", fontName=FONT, fontSize=11, leading=16,
+                           alignment=1, textColor=colors.HexColor("#666666"),
+                           spaceAfter=10)
+    s_inst = ParagraphStyle("i", fontName=FONT, fontSize=12, leading=18,
+                            spaceAfter=14)
+    s_problem = ParagraphStyle("p", fontName=FONT, fontSize=13, leading=20,
+                               spaceAfter=10)
+    s_answer = ParagraphStyle("a", fontName=FONT, fontSize=11, leading=16,
+                              textColor=colors.HexColor("#1a6b3c"))
+    s_note = ParagraphStyle("n", fontName=FONT, fontSize=11, leading=16,
+                            textColor=colors.HexColor("#8a6d1a"))
+
+    story = []
+    story.append(Paragraph(_pdf_clean_text(worksheet.title), s_title))
+    stars = "★" * worksheet.difficulty_level + "☆" * (5 - worksheet.difficulty_level)
+    story.append(Paragraph(
+        _pdf_clean_text("幼儿：" + worksheet.child_name + " ｜ 日期：" + worksheet.date +
+        " ｜ 难度：" + stars),
+        s_sub,
+    ))
+
+    if worksheet.learning_objective:
+        story.append(Paragraph(_pdf_clean_text("学习目标：" + worksheet.learning_objective), s_note))
+    if worksheet.memory_note:
+        story.append(Paragraph(_pdf_clean_text(worksheet.memory_note), s_note))
+
+    story.append(Spacer(1, 4))
+    story.append(Paragraph(_pdf_clean_text(worksheet.instructions).replace("\n", "<br/>"), s_inst))
+    story.append(Spacer(1, 6))
+
+    # 题目区（每 4 题一组，便于换页）
+    group = []
+    for i, prob in enumerate(worksheet.problems):
+        answer = worksheet.answer_key.get(prob.number, "")
+        ans_txt = ""
+        if worksheet.config.include_answer_key and answer not in (None, ""):
+            ans_txt = "（答案：" + str(answer) + "）"
+        emoji = getattr(prob, "emoji", "") or ""
+        group.append(Paragraph(
+            _pdf_clean_text(str(prob.number) + ". " + str(emoji) + " " + str(prob.prompt) + " " + ans_txt),
+            s_problem,
+        ))
+        if len(group) >= 4 or i == len(worksheet.problems) - 1:
+            story.append(KeepTogether(group))
+            story.append(Spacer(1, 8))
+            group = []
+
+    # 答案区
+    if worksheet.config.include_answer_key and worksheet.answer_key:
+        story.append(Spacer(1, 6))
+        story.append(Paragraph(_pdf_clean_text("参考答案"), s_answer))
+        ans_lines = []
+        for num in sorted(worksheet.answer_key.keys()):
+            ans_lines.append(str(num) + ". " + str(worksheet.answer_key[num]))
+        story.append(Preformatted(_pdf_clean_text("   ".join(ans_lines)), s_answer))
+
+    # 完成奖励
+    story.append(Spacer(1, 10))
+    story.append(Paragraph(_pdf_clean_text("完成奖励：☆ ☆ ☆（做完请老师/家长涂色）"), s_note))
+
+    doc.build(story)
+    return buf.getvalue()

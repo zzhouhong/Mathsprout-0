@@ -17,6 +17,7 @@ Page({
     selectedDims: ["counting", "shapes_space"],
     dimOptions: DIM_OPTIONS,
     generating: false,
+    exporting: false,
     previewText: "",
     error: "",
   },
@@ -79,5 +80,49 @@ Page({
       data: this.data.previewText,
       success: () => wx.showToast({ title: "操作单已复制", icon: "success" }),
     });
+  },
+
+  // 导出操作单为 PDF（下载 → 预览 → 可保存/分享）
+  async exportPdf() {
+    if (!this.data.previewText) {
+      wx.showToast({ title: "请先生成操作单", icon: "none" });
+      return;
+    }
+    this.setData({ exporting: true });
+    try {
+      const res = await api.generateWorksheetPdf({
+        age_group: AGE_GROUPS[this.data.ageIndex],
+        difficulty: this.data.difficulty,
+        dimensions: this.data.selectedDims.join(","),
+        include_answer: true,
+      });
+      // callContainer 二进制：res.data 是 ArrayBuffer；downloadFile：res.tempFilePath
+      let filePath = res.tempFilePath;
+      if (!filePath && res.data && typeof res.data === "object") {
+        // callContainer 二进制响应需要转本地文件
+        const fs = wx.getFileSystemManager();
+        const tmp = wx.env.USER_DATA_PATH + "/worksheet_" + Date.now() + ".pdf";
+        fs.writeFileSync(tmp, res.data, "binary");
+        filePath = tmp;
+      }
+      if (!filePath) {
+        throw new Error("导出失败：未获取到文件");
+      }
+      // 打开 PDF 预览（用户可保存/转发）
+      wx.openDocument({
+        filePath,
+        fileType: "pdf",
+        showMenu: true,
+        fail: (err) => {
+          console.error("[exportPdf] openDocument fail:", err);
+          wx.showToast({ title: "PDF 已下载，请用其他方式打开", icon: "none", duration: 3000 });
+        },
+      });
+    } catch (e) {
+      console.error("[exportPdf] err:", e);
+      wx.showToast({ title: (e && e.message) || "导出失败，请重试", icon: "none", duration: 3000 });
+    } finally {
+      this.setData({ exporting: false });
+    }
   },
 });

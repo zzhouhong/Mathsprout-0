@@ -43,6 +43,7 @@
     <view class="preview-head">
       <view class="preview-title">📋 操作单预览</view>
       <button class="copy-btn" size="mini" bindtap="copyPreview">复制</button>
+      <button class="pdf-btn" size="mini" bindtap="exportPdf" loading="{{exporting}}" disabled="{{exporting}}">{{exporting ? '导出中...' : '导出 PDF'}}</button>
     </view>
     <text class="preview-content" user-select>{{previewText}}</text>
   </view>
