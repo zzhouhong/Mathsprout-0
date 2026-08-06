@@ -929,6 +929,15 @@ async def generate_worksheet_endpoint(
                     + quote(filename),
             },
         )
+    elif format == "pdf_base64":
+        # 小程序通道：callContainer 对二进制响应兼容性不稳（data 可能为 string/null），
+        # 统一走 JSON + base64，小程序端用 wx.base64ToArrayBuffer 解码
+        import base64
+        pdf_bytes = worksheet_to_pdf(worksheet)
+        return JSONResponse(content={
+            "filename": "worksheet_" + worksheet.child_name + ".pdf",
+            "content_base64": base64.b64encode(pdf_bytes).decode("ascii"),
+        })
     elif format == "markdown":
         md = worksheet_to_markdown(worksheet)
         return JSONResponse(content={"markdown": md, "answer_key": worksheet.answer_key})

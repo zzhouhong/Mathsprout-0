@@ -291,48 +291,16 @@ module.exports = {
     return request("/worksheets/generate?" + qs, { auth: true, showLoading: true });
   },
 
-  // 导出操作单 PDF（直接下载文件，不走 JSON request）
+  // 导出操作单 PDF（base64 JSON 通道）
+  // 注：不用 callContainer 二进制响应——对 application/pdf 的兼容性在部分
+  // 基础库/开发者工具版本不稳（res.data 可能为 string/null）；JSON+base64
+  // 全版本稳，小程序端用 wx.base64ToArrayBuffer 解码写文件
   generateWorksheetPdf: (params) => {
     const qs = Object.keys(params)
       .filter((k) => params[k] !== undefined && params[k] !== null && params[k] !== "")
       .map((k) => encodeURIComponent(k) + "=" + encodeURIComponent(params[k]))
       .join("&");
-    const qs2 = qs + (qs ? "&" : "") + "format=pdf";
-    if (app.globalData.useCloud) {
-      // 云托管：callContainer 支持二进制响应
-      wx.showLoading({ title: "导出中...", mask: true });
-      return new Promise((resolve, reject) => {
-        wx.cloud
-          .callContainer({
-            config: { env: app.globalData.cloudEnv },
-            path: "/api/v1/worksheets/generate?" + qs2,
-            method: "GET",
-            header: { "X-WX-SERVICE": app.globalData.cloudService },
-            success: (res) => {
-              wx.hideLoading();
-              resolve(res);
-            },
-            fail: (err) => {
-              wx.hideLoading();
-              reject(err);
-            },
-          });
-      });
-    }
-    // 本地调试：wx.downloadFile 直连
-    wx.showLoading({ title: "导出中...", mask: true });
-    return new Promise((resolve, reject) => {
-      wx.downloadFile({
-        url: app.globalData.apiBase + "/worksheets/generate?" + qs2,
-        success: (res) => {
-          wx.hideLoading();
-          resolve(res);
-        },
-        fail: (err) => {
-          wx.hideLoading();
-          reject(err);
-        },
-      });
-    });
+    const qs2 = qs + (qs ? "&" : "") + "format=pdf_base64";
+    return request("/worksheets/generate?" + qs2, { auth: true, showLoading: true });
   },
 };
