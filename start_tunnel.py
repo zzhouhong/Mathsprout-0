@@ -1,12 +1,17 @@
 """
-萌芽数学 Mathsprout — 自动重连隧道
+萌芽助手 Mathsprout — 自动重连隧道
 bore 断线自动重连，刷新桌面地址文件
 """
 import subprocess, re, urllib.request, json, os, time, sys
 
 BORE = os.path.expandvars(r"%USERPROFILE%\bore\bore.exe")
 DESKTOP = os.path.expandvars(r"%USERPROFILE%\Desktop")
-URL_FILE = os.path.join(DESKTOP, "萌芽数学-访问地址.txt")
+# 桌面文件名兼容：旧名 "萌芽数学-访问地址.txt" 仍可能存在（云端不动 + 保留历史桌面文件），优先读旧名
+URL_FILE_CANDIDATES = [
+    os.path.join(DESKTOP, "萌芽数学-访问地址.txt"),  # 旧名（兼容）
+    os.path.join(DESKTOP, "萌芽助手-访问地址.txt"),  # 新名
+]
+URL_FILE = next((p for p in URL_FILE_CANDIDATES if os.path.exists(p)), URL_FILE_CANDIDATES[-1])
 
 def start_bore():
     """启动 bore 并返回公网 URL"""
@@ -33,13 +38,13 @@ def test_url(url):
 
 def save_url(url):
     with open(URL_FILE, "w", encoding="utf-8") as f:
-        f.write(f"萌芽数学 Mathsprout\n\n")
+        f.write(f"萌芽助手 Mathsprout\n\n")
         f.write(f"{url}\n")
         f.write(f"教师: teacher@kindergarten.cn / demo123\n")
         f.write(f"隧道自动重连中，如失效请等待几秒刷新\n")
 
 print("=" * 50)
-print("  萌芽数学 Mathsprout — 自动重连隧道")
+print("  萌芽助手 Mathsprout — 自动重连隧道")
 print("=" * 50)
 
 retry_delay = 5

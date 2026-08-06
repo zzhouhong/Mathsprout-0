@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## 项目概述
 
-萌芽数学 Mathsprout — 基于 Claude Vision API 的幼儿数学操作单识别与能力发展评估系统。
+萌芽助手 Mathsprout — 基于 Claude Vision API 的幼儿数学操作单识别与能力发展评估系统。
 
 ## 常用命令
 

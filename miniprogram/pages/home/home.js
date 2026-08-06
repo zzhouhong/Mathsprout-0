@@ -77,7 +77,7 @@ Page({
 
   onShareAppMessage() {
     return {
-      title: this.data.childName ? this.data.childName + "的成长档案 🌱" : "萌芽数学 · 成长档案",
+      title: this.data.childName ? this.data.childName + "的成长档案 🌱" : "萌芽助手 · 成长档案",
       path: "/pages/index/index",
     };
   },

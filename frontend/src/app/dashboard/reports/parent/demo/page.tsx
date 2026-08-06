@@ -150,7 +150,7 @@ function ParentReportDemoInner() {
       <div className="text-center pb-8">
         <Separator className="mb-4" />
         <p className="text-xs text-slate-400 mb-4">
-          此报告由萌芽数学 Mathsprout 生成 · 基于《学前儿童数学学习与发展核心经验》
+          此报告由萌芽助手 Mathsprout 生成 · 基于《学前儿童数学学习与发展核心经验》
           <br />
           每个孩子都有自己独特的成长节奏，无需与其他孩子比较 🌈
         </p>

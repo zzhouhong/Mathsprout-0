@@ -1,5 +1,5 @@
 /**
- * 萌芽数学 Mathsprout — API 客户端
+ * 萌芽助手 Mathsprout — API 客户端
  *
  * 自动处理：
  * - Bearer token 注入（从 globalData 或 storage 读取）

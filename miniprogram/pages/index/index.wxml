@@ -1,7 +1,7 @@
 <view class="container">
   <view class="card">
     <view class="icon">👶</view>
-    <view class="title">萌芽数学 Mathsprout</view>
+    <view class="title">萌芽助手 Mathsprout</view>
     <view class="subtitle">输入老师提供的访问码查看宝宝成长记录</view>
 
     <input class="code-input" type="text" value="{{code}}" placeholder="请输入访问码"

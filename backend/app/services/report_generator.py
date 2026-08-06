@@ -168,7 +168,7 @@ async def generate_parent_report(
             if cur and cur.get("score_details", {}).get("total", 0) > 0:
                 if cur.get("score", 0) > w.get("latest_score", 0) + 5:
                     progressed.append(w["display_name"])
-        summary = f"这是宝宝第 {session_count} 次和萌芽数学见面啦！"
+        summary = f"这是宝宝第 {session_count} 次和萌芽助手见面啦！"
         if progressed:
             summary += f"上次还在努力的「{'、'.join(progressed)}」，这次有明显进步，为宝宝点赞！🌟"
         elif improving_names:

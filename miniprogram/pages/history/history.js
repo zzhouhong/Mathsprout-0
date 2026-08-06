@@ -41,7 +41,7 @@ Page({
   onShareAppMessage() {
     const name = (app.globalData.childName || "");
     return {
-      title: name ? name + "的成长记录 📝" : "萌芽数学 · 成长记录",
+      title: name ? name + "的成长记录 📝" : "萌芽助手 · 成长记录",
       path: "/pages/index/index",
     };
   },

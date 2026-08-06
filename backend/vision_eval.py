@@ -1,5 +1,5 @@
 r"""
-萌芽数学 Mathsprout — 视觉识别独立评估工具 (Phase 2.1)
+萌芽助手 Mathsprout — 视觉识别独立评估工具 (Phase 2.1)
 
 只跑 AI 视觉识别管线（3-pass），不跑评估引擎。用于：
 - 对比不同 AI 提供商（Qwen-VL vs Claude）对同一张图的识别效果
@@ -269,7 +269,7 @@ async def run_vision_eval(
 
 async def main():
     parser = argparse.ArgumentParser(
-        description="萌芽数学 Mathsprout — 视觉识别独立评估工具",
+        description="萌芽助手 Mathsprout — 视觉识别独立评估工具",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 示例:
@@ -297,7 +297,7 @@ async def main():
     switch_provider(args.provider)
 
     print("=" * 60)
-    print("  萌芽数学 Mathsprout — 视觉识别评估")
+    print("  萌芽助手 Mathsprout — 视觉识别评估")
     print("=" * 60)
     print()
 

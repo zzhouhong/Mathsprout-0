@@ -96,7 +96,7 @@
 
 1. **服务管理** → **新建服务** → **从代码仓库** 或 **本地上传**
 2. 推荐：**上传本地代码**
-   - 选「上传代码包」→ 上传整个 `Mathsprout-0/` 目录的 zip（不含 `.venv`、`node_modules`、`__pycache__`、`*.png` 大文件）
+   - 选「上传代码包」→ 上传整个 `萌芽助手/` 目录的 zip（不含 `.venv`、`node_modules`、`__pycache__`、`*.png` 大文件）
    - 构建目录：`./`（即根目录）
    - 构建上下文：会自动找 `backend/Dockerfile` → **改用 `backend/` 作为构建目录**（CloudBase 的 cloudbaserc.json 已指定 `dockerfilePath: Dockerfile`，从 `buildDir: .` 出发）
 3. 服务名：`backend`

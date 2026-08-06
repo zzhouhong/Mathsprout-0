@@ -1,5 +1,5 @@
 """
-萌芽数学 Mathsprout — 教育智能体（比赛版）
+萌芽助手 Mathsprout — 教育智能体（比赛版）
 
 单文件 Web 应用：FastAPI + 内嵌 HTML/CSS/JS。
 零新依赖，纯 Python 运行。
@@ -47,7 +47,7 @@ from app.core.prompts.pck_reference import (
 # FastAPI App
 # ═══════════════════════════════════════════════════════════════════════════
 
-app = FastAPI(title="萌芽数学 Mathsprout", version="2.0-competition")
+app = FastAPI(title="萌芽助手 Mathsprout", version="2.0-competition")
 
 # Reusable recognizer instance (keeps cache warm)
 _recognizer = None
@@ -261,7 +261,7 @@ HTML_PAGE = r"""<!DOCTYPE html>
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>萌芽数学 Mathsprout — 幼儿数学教育智能体</title>
+<title>萌芽助手 Mathsprout — 幼儿数学教育智能体</title>
 <style>
   :root { --bg:#f8fafc; --card:#fff; --text:#1e293b; --sub:#64748b; --border:#e2e8f0;
     --pri:#6366f1; --pri2:#818cf8; --suc:#10b981; --war:#f59e0b; --err:#ef4444; --pin:#ec4899;
@@ -393,7 +393,7 @@ HTML_PAGE = r"""<!DOCTYPE html>
 <body>
 <div class="app">
   <header>
-    <h1>🌱 萌芽数学 Mathsprout</h1>
+    <h1>🌱 萌芽助手 Mathsprout</h1>
     <p>幼儿数学操作单 AI 识别 · PCK 四维度评估 · 双版发展报告</p>
   </header>
 

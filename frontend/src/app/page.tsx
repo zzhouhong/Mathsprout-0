@@ -80,7 +80,7 @@ export default function Home() {
             <MascotCharacter size="lg" />
           </div>
           <h1 className="text-5xl font-extrabold kid-rainbow-text">
-            萌芽数学
+            萌芽助手
           </h1>
           <p className="text-xl text-gray-600 font-medium">Mathsprout</p>
           <p className="text-lg text-gray-500 leading-relaxed max-w-md mx-auto">

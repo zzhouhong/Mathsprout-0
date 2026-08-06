@@ -1,5 +1,5 @@
 /**
- * 萌芽数学 Mathsprout — 比赛Demo主页
+ * 萌芽助手 Mathsprout — 比赛Demo主页
  *
  * 单页纵向流：上传操作单 → AI分析进度 → 教师/家长双版报告
  * 无登录、无侧边栏、无批量——只聚焦核心故事线。
@@ -152,7 +152,7 @@ export default function DemoPage() {
           </span>
         </div>
         <h1 className="text-3xl md:text-4xl font-extrabold text-slate-800 tracking-tight">
-          🌱 萌芽数学{" "}
+          🌱 萌芽助手{" "}
           <span className="text-slate-400 font-normal text-xl">Mathsprout</span>
         </h1>
         <p className="text-lg text-slate-500 max-w-lg mx-auto leading-relaxed">

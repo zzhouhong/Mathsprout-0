@@ -738,7 +738,7 @@ def worksheet_to_html(worksheet: GeneratedWorksheet) -> str:
             <div class="answer-badge">👩‍🏫</div>
             <h2>📝 答案（教师用）</h2>
             <table><thead><tr><th>题号</th><th>答案</th></tr></thead><tbody>{answer_rows}</tbody></table>
-            <div class="mascot-footer">🌱 萌芽数学 · 为成长助力</div>
+            <div class="mascot-footer">🌱 萌芽助手 · 为成长助力</div>
         </div>
         """
 
@@ -900,7 +900,7 @@ def worksheet_to_html(worksheet: GeneratedWorksheet) -> str:
 </head>
 <body>
   <h1>🧮 {worksheet.title}</h1>
-  <div class="subtitle">🌱 萌芽数学 · 幼儿数学练习操作单</div>
+  <div class="subtitle">🌱 萌芽助手 · 幼儿数学练习操作单</div>
   <div class="meta">
     <span>👶 {worksheet.child_name}</span>
     <span>📅 {worksheet.date}</span>
@@ -928,6 +928,6 @@ def worksheet_to_html(worksheet: GeneratedWorksheet) -> str:
     <span class="reward-stars">☆ ☆ ☆</span>
     <span class="reward-hint">（做完请老师/家长涂色奖励星星）</span>
   </div>
-  <div class="mascot-footer">🌱 萌芽数学 Mathsprout · 陪伴每一次成长</div>
+  <div class="mascot-footer">🌱 萌芽助手 Mathsprout · 陪伴每一次成长</div>
 </body>
 </html>"""

@@ -184,7 +184,7 @@ def generate_teacher_pdf(report: Dict) -> bytes:
         leftMargin=18 * mm, rightMargin=18 * mm,
         topMargin=16 * mm, bottomMargin=16 * mm,
         title=f"{report.get('child_name', '幼儿')} 教师版报告",
-        author="萌芽数学 Mathsprout",
+        author="萌芽助手 Mathsprout",
     )
     styles = _build_styles()
     story = _build_teacher_story(report, styles)
@@ -200,7 +200,7 @@ def generate_parent_pdf(report: Dict) -> bytes:
         leftMargin=18 * mm, rightMargin=18 * mm,
         topMargin=16 * mm, bottomMargin=16 * mm,
         title=f"{report.get('child_name', '幼儿')} 成长观察记录",
-        author="萌芽数学 Mathsprout",
+        author="萌芽助手 Mathsprout",
     )
     styles = _build_styles()
     story = _build_parent_story(report, styles)
@@ -461,7 +461,7 @@ def _format_date(iso_str: str) -> str:
 
 def _footer_text() -> str:
     return (
-        "本报告由萌芽数学 Mathsprout 自动生成 · "
+        "本报告由萌芽助手 Mathsprout 自动生成 · "
         "基于《学前儿童数学学习与发展核心经验》PCK框架 · "
         "仅供教育参考"
     )

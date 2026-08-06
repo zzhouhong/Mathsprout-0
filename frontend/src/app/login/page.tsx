@@ -40,7 +40,7 @@ export default function LoginPage() {
           <div className="text-4xl">🧮</div>
           <h1 className="text-xl font-bold text-slate-800">教师登录</h1>
           <p className="text-sm text-slate-500">
-            萌芽数学 Mathsprout
+            萌芽助手 Mathsprout
           </p>
         </div>
 

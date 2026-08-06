@@ -1,5 +1,5 @@
 r"""
-萌芽数学 Mathsprout — 独立评估核心 CLI
+萌芽助手 Mathsprout — 独立评估核心 CLI
 
 纯 Python 脚本，零外部依赖（无 AI API、无数据库、无 Web）。
 接受 JSON 场景文件，跑通 PCK 评估引擎 → 双报告全流程。
@@ -86,7 +86,7 @@ DEMO_SCENARIOS = {
 def format_as_markdown(scenario_name, child, age, assessment, teacher_report, parent_report, timing_ms):
     """将评估结果格式化为可读 Markdown."""
     lines = []
-    lines.append(f"# 萌芽数学评估报告")
+    lines.append(f"# 萌芽助手评估报告")
     lines.append(f"")
     lines.append(f"**场景**: `{scenario_name}` | **幼儿**: {child} | **年龄段**: {age} | **耗时**: {timing_ms:.0f}ms")
     lines.append(f"")
@@ -211,7 +211,7 @@ async def main():
     import argparse
 
     parser = argparse.ArgumentParser(
-        description="萌芽数学 Mathsprout — 独立评估核心 CLI",
+        description="萌芽助手 Mathsprout — 独立评估核心 CLI",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 示例:
@@ -230,7 +230,7 @@ async def main():
 
     if args.demo:
         print("=" * 60)
-        print("  萌芽数学 Mathsprout — 内置 Demo 场景")
+        print("  萌芽助手 Mathsprout — 内置 Demo 场景")
         print("=" * 60)
         print()
         for name, data in DEMO_SCENARIOS.items():

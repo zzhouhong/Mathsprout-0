@@ -113,7 +113,7 @@ Page({
   onShareAppMessage() {
     const name = app.globalData.childName || "";
     return {
-      title: name ? name + "的成长报告 📊" : "萌芽数学 · 成长报告",
+      title: name ? name + "的成长报告 📊" : "萌芽助手 · 成长报告",
       path: "/pages/index/index",
     };
   },

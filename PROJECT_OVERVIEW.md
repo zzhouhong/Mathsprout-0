@@ -1,4 +1,4 @@
-# Mathsprout-0 项目理解（接手笔记）
+# 萌芽助手 项目理解（接手笔记）
 
 > 本地接手时间：2026-08-03
 > 维护者：ujvu（你） + zzhouhong（owner）
@@ -7,7 +7,7 @@
 
 ## 一句话定位
 
-**萌芽数学 Mathsprout**——基于 AI Vision（qwen-vl-max / Claude Vision 双提供商可切换）的**幼儿园数学操作单识别 + 能力发展评估系统**，依据《学前儿童数学学习与发展核心经验》（黄瑾、田方 2015）构建 PCK 知识底座，输出**教师版（含反思）+ 家长版（禁用"分数/排名/落后"字眼）**双份报告。
+**萌芽助手 Mathsprout**——基于 AI Vision（qwen-vl-max / Claude Vision 双提供商可切换）的**幼儿园数学操作单识别 + 能力发展评估系统**，依据《学前儿童数学学习与发展核心经验》（黄瑾、田方 2015）构建 PCK 知识底座，输出**教师版（含反思）+ 家长版（禁用"分数/排名/落后"字眼）**双份报告。
 
 ## 关键事实速览
 
@@ -114,7 +114,7 @@ Next.js 前端  :3000  ──rewrites──▶  FastAPI 后端 :8000
 ## 本地启动（macOS）
 
 ```bash
-cd /Users/cuishiming/.zcode/workspace/default/Mathsprout-0
+cd /Users/cuishiming/.zcode/workspace/default/萌芽助手
 
 # 1. Python 3.12 + venv（强推 3.12，3.11 可能坑）
 brew install python@3.12
@@ -141,7 +141,7 @@ cd backend
   --tb=short
 
 # 5. 前端（另一终端）
-cd /Users/cuishiming/.zcode/workspace/default/Mathsprout-0/frontend
+cd /Users/cuishiming/.zcode/workspace/default/萌芽助手/frontend
 npm install --legacy-peer-deps
 npm run dev          # = next dev --webpack
 
@@ -157,5 +157,5 @@ npm run dev          # = next dev --webpack
 - [ ] 跑通 offline 模式 demo（确认 `/api/v1/worksheets/demo` 端到端通）
 - [ ] 评估页教师/家长 Tab 切换确认现状
 - [ ] 决定是否清理 `_pass/_dual` 系列死代码
-- [ ] 评估 P0.5 UI 卡通化工作量（参考 `萌芽数学.md`）
+- [ ] 评估 P0.5 UI 卡通化工作量（参考 `萌芽助手.md`）
 - [ ] 与 zzhouhong 沟通比赛时间表与分工

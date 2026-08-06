@@ -30,7 +30,7 @@ export function DashboardTabs() {
                 <MascotCharacter size="sm" />
               </span>
               <span className="font-bold text-base text-slate-700 hidden sm:inline group-hover:text-kid-green transition-colors">
-                萌芽数学
+                萌芽助手
               </span>
             </Link>
 

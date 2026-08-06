@@ -262,7 +262,7 @@ export default function ParentPage() {
 
           <div className="text-center pb-8 pt-4">
             <p className="text-xs text-slate-400 leading-relaxed px-4">
-              此报告由萌芽数学 Mathsprout 生成
+              此报告由萌芽助手 Mathsprout 生成
               <br className="sm:hidden" />
               <span className="hidden sm:inline"> · </span>
               基于《学前儿童数学学习与发展核心经验》

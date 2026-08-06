@@ -25,11 +25,11 @@ export const viewport: Viewport = {
 };
 
 export const metadata: Metadata = {
-  title: "萌芽数学 Mathsprout",
+  title: "萌芽助手 Mathsprout",
   description: "基于AI的幼儿数学操作单识别与能力发展评估系统",
   appleWebApp: {
     capable: true,
-    title: "萌芽数学",
+    title: "萌芽助手",
     statusBarStyle: "default",
   },
 };
