@@ -668,8 +668,8 @@ async def cloud_analyze(
             },
         )
 
-    return JSONResponse(
-        content=await _run_analysis_pipeline(
+    try:
+        result = await _run_analysis_pipeline(
             image_bytes,
             "cloud-worksheet.jpg",
             payload.age_group,
@@ -677,7 +677,28 @@ async def cloud_analyze(
             payload.child_id,
             db,
         )
-    )
+        return JSONResponse(content=result)
+    except RuntimeError as e:
+        err_msg = str(e)
+        # MiniMax 配额不足 → 503 服务暂不可用（前端可提示）
+        if "1008" in err_msg or "insufficient balance" in err_msg.lower() or "配额" in err_msg:
+            return JSONResponse(
+                status_code=503,
+                content={
+                    "error": True,
+                    "detail": "AI 识别服务暂不可用：MiniMax 周配额已用尽，请稍后重试。",
+                    "error_type": "QuotaExhausted",
+                },
+            )
+        return JSONResponse(
+            status_code=500,
+            content={"error": True, "detail": err_msg or "分析失败", "error_type": "RuntimeError"},
+        )
+    except Exception as e:
+        return JSONResponse(
+            status_code=500,
+            content={"error": True, "detail": f"分析失败：{e}", "error_type": type(e).__name__},
+        )
 
 
 # ─── Teacher Confirmation Endpoints ────────────────────────────────────
