@@ -851,6 +851,124 @@ async def recommend_difficulty_endpoint(
 
 # ─── Worksheet Generation Endpoint ────────────────────────────────────
 
+def _render_worksheet(worksheet, format: str):
+    """按 format 渲染操作单（html/pdf/pdf_base64/markdown/json），供 GET/POST 共用。"""
+    from app.services.worksheet_generator import (
+        worksheet_to_html,
+        worksheet_to_markdown,
+        worksheet_to_pdf,
+    )
+    from fastapi.responses import HTMLResponse, JSONResponse, Response
+    from urllib.parse import quote
+    import base64
+
+    if format == "html":
+        return HTMLResponse(content=worksheet_to_html(worksheet))
+    if format == "pdf":
+        pdf_bytes = worksheet_to_pdf(worksheet)
+        filename = "worksheet_" + worksheet.child_name + ".pdf"
+        return Response(
+            content=pdf_bytes,
+            media_type="application/pdf",
+            headers={
+                "Content-Disposition":
+                    'attachment; filename="worksheet.pdf"; filename*=UTF-8\'\''
+                    + quote(filename),
+            },
+        )
+    if format == "pdf_base64":
+        pdf_bytes = worksheet_to_pdf(worksheet)
+        return JSONResponse(content={
+            "filename": "worksheet_" + worksheet.child_name + ".pdf",
+            "content_base64": base64.b64encode(pdf_bytes).decode("ascii"),
+        })
+    if format == "markdown":
+        return JSONResponse(content={"markdown": worksheet_to_markdown(worksheet)})
+    # json 兜底
+    return JSONResponse(content={
+        "title": worksheet.title,
+        "child_name": worksheet.child_name,
+        "difficulty_level": worksheet.difficulty_level,
+        "problems": [
+            {
+                "number": p.number,
+                "type": p.type,
+                "dimension": p.dimension,
+                "prompt": p.prompt,
+                "operation": p.operation,
+            }
+            for p in worksheet.problems
+        ],
+        "answer_key": worksheet.answer_key,
+    })
+
+
+async def _generate_worksheet_payload(config, child_memory=None):
+    """生成操作单：有 activity_theme 走 AI 情境化（失败降级模板），否则走模板。"""
+    import logging
+    from app.services.worksheet_generator import generate_worksheet
+    from app.services.worksheet_ai_generator import (
+        generate_worksheet_with_ai,
+        WorksheetAIGenerationError,
+        MAX_ACTIVITY_THEME_LENGTH,
+    )
+
+    logger = logging.getLogger(__name__)
+    if config.activity_theme:
+        theme = config.activity_theme
+        if len(theme) > MAX_ACTIVITY_THEME_LENGTH:
+            from fastapi import HTTPException
+            raise HTTPException(
+                status_code=422,
+                detail=f"活动情境请控制在 {MAX_ACTIVITY_THEME_LENGTH} 字以内",
+            )
+        try:
+            return await generate_worksheet_with_ai(config, theme)
+        except WorksheetAIGenerationError as exc:
+            # AI 不可用（配额/鉴权/超时/校验失败）→ 降级模板，标注提示
+            logger.warning("AI worksheet generation failed, fallback to template: %s", exc)
+            worksheet = generate_worksheet(config, child_memory=child_memory)
+            worksheet.generation_mode = "fallback"
+            worksheet.generation_note = "AI 情境化暂时不可用，已为你生成标准情境操作单，可稍后重试。"
+            return worksheet
+    return generate_worksheet(config, child_memory=child_memory)
+
+
+class WorksheetGenerateRequest(BaseModel):
+    child_name: str = "小朋友"
+    age_group: AgeGroupEnum = AgeGroupEnum.MIDDLE
+    difficulty: int = 2
+    dimensions: str = "counting,shapes_space"
+    problem_count: int = 8
+    include_answer: bool = True
+    format: str = "markdown"
+    activity_theme: Optional[str] = None
+    child_id: Optional[int] = None
+
+
+@router.post("/generate")
+async def generate_worksheet_post(body: WorksheetGenerateRequest, db = Depends(get_db)):
+    """POST 版生成（长活动情境走 body，避免 URL 长度/编码问题）。"""
+    from app.services.worksheet_generator import WorksheetConfig
+    from app.services.memory_service import build_child_memory
+
+    dim_list = [d.strip() for d in body.dimensions.split(",") if d.strip()]
+    child_memory = None
+    if body.child_id is not None:
+        child_memory = await build_child_memory(db, body.child_id)
+    config = WorksheetConfig(
+        child_name=body.child_name,
+        age_group=body.age_group.value,
+        difficulty_level=body.difficulty,
+        dimensions=dim_list,
+        problem_count=body.problem_count,
+        include_answer_key=body.include_answer,
+        activity_theme=(body.activity_theme or "").strip() or None,
+    )
+    worksheet = await _generate_worksheet_payload(config, child_memory)
+    return _render_worksheet(worksheet, body.format)
+
+
 @router.get("/generate")
 async def generate_worksheet_endpoint(
     child_name: str = Query(default="小朋友"),
@@ -907,53 +1025,9 @@ async def generate_worksheet_endpoint(
         dimensions=dim_list,
         problem_count=problem_count,
         include_answer_key=include_answer,
+        activity_theme=(activity_theme or "").strip() or None,
     )
 
-    worksheet = generate_worksheet(config, child_memory=child_memory)
+    worksheet = await _generate_worksheet_payload(config, child_memory)
 
-    if format == "html":
-        html = worksheet_to_html(worksheet)
-        return HTMLResponse(content=html)
-    elif format == "pdf":
-        from fastapi.responses import Response
-        from urllib.parse import quote
-        pdf_bytes = worksheet_to_pdf(worksheet)
-        # header 只允许 latin-1，中文文件名必须走 RFC 5987 filename*（UTF-8 编码）
-        filename = "worksheet_" + worksheet.child_name + ".pdf"
-        return Response(
-            content=pdf_bytes,
-            media_type="application/pdf",
-            headers={
-                "Content-Disposition":
-                    'attachment; filename="worksheet.pdf"; filename*=UTF-8\'\''
-                    + quote(filename),
-            },
-        )
-    elif format == "pdf_base64":
-        # 小程序通道：callContainer 对二进制响应兼容性不稳（data 可能为 string/null），
-        # 统一走 JSON + base64，小程序端用 wx.base64ToArrayBuffer 解码
-        import base64
-        pdf_bytes = worksheet_to_pdf(worksheet)
-        return JSONResponse(content={
-            "filename": "worksheet_" + worksheet.child_name + ".pdf",
-            "content_base64": base64.b64encode(pdf_bytes).decode("ascii"),
-        })
-    elif format == "markdown":
-        md = worksheet_to_markdown(worksheet)
-        return JSONResponse(content={"markdown": md, "answer_key": worksheet.answer_key})
-    else:
-        return JSONResponse(content={
-            "title": worksheet.title,
-            "child_name": worksheet.child_name,
-            "difficulty_level": worksheet.difficulty_level,
-            "problems": [
-                {
-                    "number": p.number,
-                    "type": p.type,
-                    "prompt": p.prompt,
-                    "dimension": p.dimension,
-                }
-                for p in worksheet.problems
-            ],
-            "answer_key": worksheet.answer_key,
-        })
+    return _render_worksheet(worksheet, format)

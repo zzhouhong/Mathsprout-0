@@ -30,9 +30,22 @@
     </view>
   </view>
 
+  <!-- 活动情境描述（选填） -->
+  <view class="field">
+    <text class="label">💡 活动情境（选填）</text>
+    <textarea
+      class="scenario-input"
+      value="{{scenario}}"
+      bindinput="onScenarioInput"
+      maxlength="300"
+      placeholder="描述活动情境，如：春游时小兔分萝卜、超市购物找零、母亲节送花… 填写后 AI 生成贴合情境的操作单"
+    ></textarea>
+    <view class="hint">{{scenario.length}}/300 · 留空则生成标准情境操作单</view>
+  </view>
+
   <!-- 生成按钮 -->
   <button class="btn-primary" bindtap="generate" loading="{{generating}}" disabled="{{generating}}">
-    {{generating ? '生成中...' : '✨ 生成操作单'}}
+    {{generating ? (scenario ? 'AI 情境化生成中...' : '生成中...') : '✨ 生成操作单'}}
   </button>
 
   <!-- 错误 -->

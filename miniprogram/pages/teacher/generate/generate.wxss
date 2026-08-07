@@ -13,6 +13,14 @@
 .dim-chip-active {
   background:#EEF2FF; color:#4F46E5; font-weight:600;
 }
+.scenario-input {
+  width:100%; min-height:140rpx; box-sizing:border-box;
+  background:#F8FAFC; border:2rpx solid #E2E8F0; border-radius:16rpx;
+  padding:20rpx; font-size:28rpx; color:#1E293B; line-height:1.5;
+}
+.hint {
+  margin-top:8rpx; font-size:24rpx; color:#94A3B8;
+}
 
 .btn-primary {
   background:#4F46E5; color:#fff; border-radius:16rpx;

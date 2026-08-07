@@ -15,6 +15,11 @@ from typing import Dict, List, Optional, Any
 from dataclasses import dataclass, field
 
 from .interactive_content.templates import TEMPLATE_REGISTRY
+from .interactive_content.scenarios import (
+    pick_scenario,
+    OPERATION_BY_TYPE,
+    SUPPORTED_OPERATIONS,
+)
 from .interactive_content.progressions import (
     NUMBER_RANGES,
     QUESTIONS_PER_SESSION,
@@ -40,6 +45,7 @@ class WorksheetConfig:
     large_font: bool = True             # For young children
     show_example: bool = True
     learning_objective: str = ""        # Printed on worksheet, e.g. "感知三角形的多种变式"
+    activity_theme: str = ""            # 教师输入的活动情境（如"春游时小兔分萝卜"）；非空走 AI 情境化生成
 
 
 @dataclass
@@ -52,6 +58,8 @@ class WorksheetProblem:
     data: Dict[str, Any]
     correct_answer: Any
     workspace_lines: int = 2            # Number of blank lines for writing
+    operation: str = ""                 # 操作类型：涂色/圈画/描线/配对/找一找/按规律续/点数
+    scenario: str = ""                  # 本题情境（整单故事线下）
 
 
 @dataclass
@@ -69,6 +77,11 @@ class GeneratedWorksheet:
     total_possible: int
     learning_objective: str = ""
     memory_note: str = ""           # B6: "📌 针对上次薄弱的…" line when child_memory present
+    story_title: str = ""           # 整单故事标题（如"小兔的萝卜园"）
+    scene_intro: str = ""           # 情境引言（开场白）
+    mascot_name: str = ""           # 整单固定卡通角色
+    generation_note: str = ""       # 降级/提示说明
+    generation_mode: str = "template"  # ai / template / fallback
 
 
 # ─── Worksheet Generator ──────────────────────────────────────────────
@@ -90,7 +103,10 @@ def generate_worksheet(config: Optional[WorksheetConfig] = None, child_memory: O
         config = WorksheetConfig()
 
     level = config.difficulty_level if config.difficulty_level else get_age_anchor_level(config.age_group)
-    problems = _generate_worksheet_problems(config, level)
+
+    # 整单情境化：抽一个主情境 + 固定角色，所有题共享同一故事线
+    scen = pick_scenario(random)
+    problems = _generate_worksheet_problems(config, level, scen["mascot_name"])
 
     # Generate instructions
     instructions = _generate_instructions(config.age_group)
@@ -127,6 +143,10 @@ def generate_worksheet(config: Optional[WorksheetConfig] = None, child_memory: O
         total_possible=len(problems),
         learning_objective=learning_obj,
         memory_note=memory_note,
+        story_title=scen["title"],
+        scene_intro=scen["intro"],
+        mascot_name=scen["mascot_name"],
+        generation_mode="template",
     )
 
 
@@ -151,7 +171,7 @@ def _build_memory_note(child_memory: Optional[Dict[str, Any]], selected_dims: Li
 
 
 def _generate_worksheet_problems(
-    config: WorksheetConfig, level: int
+    config: WorksheetConfig, level: int, mascot_name: str = ""
 ) -> List[WorksheetProblem]:
     """Generate the problem list for a worksheet."""
     problems = []
@@ -165,7 +185,7 @@ def _generate_worksheet_problems(
     problem_number = 1
     for i, dim in enumerate(dimensions):
         num_for_dim = per_dim + (1 if i < remainder else 0)
-        dim_problems = _generate_for_dimension(dim, level, num_for_dim, problem_number)
+        dim_problems = _generate_for_dimension(dim, level, num_for_dim, problem_number, mascot_name)
         problems.extend(dim_problems)
         problem_number += num_for_dim
 
@@ -177,6 +197,7 @@ def _generate_for_dimension(
     level: int,
     count: int,
     start_number: int,
+    mascot_name: str = "",
 ) -> List[WorksheetProblem]:
     """Generate problems for a single dimension."""
     problems = []
@@ -211,6 +232,12 @@ def _generate_for_dimension(
         elif q_type in ("number_composition", "symbol_add", "symbol_sub"):
             workspace = 2
 
+        # 从题型候选操作中选一个（随机），并包上整单故事线的情境
+        op_candidates = OPERATION_BY_TYPE.get(q_type, ("圈画", "点数"))
+        operation = random.choice(op_candidates)
+        scenario = ""
+        if mascot_name:
+            scenario = f"{mascot_name}请你帮忙完成这个小任务！"
         problem = WorksheetProblem(
             number=start_number + i,
             type=q_type,
@@ -219,6 +246,8 @@ def _generate_for_dimension(
             data=data,
             correct_answer=data.get("correct_answer", "（开放题）"),
             workspace_lines=workspace,
+            operation=operation,
+            scenario=scenario,
         )
         problems.append(problem)
 
@@ -305,6 +334,16 @@ def worksheet_to_markdown(worksheet: GeneratedWorksheet) -> str:
         f"",
         f"---",
         f"",
+    ]
+    if worksheet.story_title and worksheet.mascot_name:
+        lines += [
+            f"### 📖 {worksheet.story_title}",
+            f"{worksheet.scene_intro or ''}",
+            f"",
+            f"---",
+            f"",
+        ]
+    lines += [
         f"### 🎯 考察目标",
         f"{worksheet.learning_objective}",
         f"{worksheet.memory_note}" if worksheet.memory_note else f"",
@@ -319,7 +358,12 @@ def worksheet_to_markdown(worksheet: GeneratedWorksheet) -> str:
     ]
 
     for p in worksheet.problems:
-        lines.append(f"### {p.number}. {p.prompt}")
+        op_badge = f" ✏️操作：{p.operation}" if p.operation else ""
+        scen_line = f"📍情境：{p.scenario}" if p.scenario else ""
+        lines.append(f"### {p.number}. {p.prompt}{op_badge}")
+        if scen_line:
+            lines.append(f"")
+            lines.append(f"{scen_line}")
         lines.append(f"")
         # Add visual elements if available
         data = p.data
@@ -341,6 +385,10 @@ def worksheet_to_markdown(worksheet: GeneratedWorksheet) -> str:
         for _ in range(p.workspace_lines):
             lines.append(f"")
         lines.append(f"")
+
+    # 降级/提示说明
+    if worksheet.generation_note:
+        lines += [f"", f"---", f"", f"> ℹ️ {worksheet.generation_note}", f""]
 
     # Answer key (separate page)
     if worksheet.config.include_answer_key:
@@ -716,12 +764,16 @@ def worksheet_to_html(worksheet: GeneratedWorksheet) -> str:
         is_single = worksheet.config.problem_count == 1
         card_class = "problem single-card" if is_single else "problem"
 
+        op_badge_html = f'<span class="op-badge">{p.operation}</span>' if p.operation else ""
+        scen_html = f'<div class="prob-scenario">{p.scenario}</div>' if p.scenario else ""
         problems_html += f"""
         <div class="{card_class}">
             <div class="problem-header">
                 <span class="problem-number" style="background:{num_color}">{p.number}</span>
                 <span class="problem-prompt">{p.prompt}</span>
+                {op_badge_html}
             </div>
+            {scen_html}
             {visual_html}
             <div class="workspace">{lines_html}</div>
         </div>
@@ -780,6 +832,23 @@ def worksheet_to_html(worksheet: GeneratedWorksheet) -> str:
     background: white; padding: 6px 16px; border-radius: 999px;
     box-shadow: 0 2px 8px rgba(0,0,0,0.04); font-weight: 600;
   }}
+  .story-intro {{
+    background: linear-gradient(135deg, #E3F2FD 0%, #FFF8E7 100%);
+    border: 2.5px dashed #4D96FF; border-radius: 20px;
+    padding: 14px 20px; margin-bottom: 16px; text-align: center;
+  }}
+  .story-title {{ font-size: 20px; font-weight: 900; color: #1E3A8A; margin-bottom: 4px; }}
+  .story-text {{ font-size: 15px; color: #64748b; }}
+  .gen-note {{
+    background: #FFF3CD; border: 1.5px dashed #E0A800; border-radius: 12px;
+    padding: 8px 14px; margin-bottom: 14px; font-size: 14px; color: #8a6d1a;
+  }}
+  .op-badge {{
+    flex-shrink: 0; align-self: center;
+    background: #EEF2FF; color: #4F46E5; font-weight: 700; font-size: 13px;
+    border-radius: 999px; padding: 3px 12px; margin-left: 8px;
+  }}
+  .prob-scenario {{ font-size: 14px; color: #8a6d1a; font-style: italic; margin-bottom: 6px; }}
   .instructions {{
     background: white; border-radius: {card_radius}; padding: 16px 20px;
     margin-bottom: 20px; border: 2px dashed #FFD93D;
@@ -909,6 +978,13 @@ def worksheet_to_html(worksheet: GeneratedWorksheet) -> str:
       '🌱 小班' if is_small else '🌿 中班' if is_middle else '🌳 大班'
     }</span>
   </div>
+  {f'''
+  <div class="story-intro">
+    <div class="story-title">📖 {worksheet.story_title}</div>
+    <div class="story-text">{worksheet.scene_intro}</div>
+  </div>
+  ''' if worksheet.story_title else ''}
+  {f'<div class="gen-note">ℹ️ {worksheet.generation_note}</div>' if worksheet.generation_note else ''}
   <div class="assessment-target">
     <div class="at-mascot">{_mascot_svg(72)}</div>
     <div class="at-content">
@@ -1038,6 +1114,14 @@ def worksheet_to_pdf(worksheet: "GeneratedWorksheet") -> bytes:
         s_sub,
     ))
 
+    # 整单故事线（情境引言）
+    if worksheet.story_title and worksheet.mascot_name:
+        story.append(Paragraph(
+            _pdf_clean_text("📖 " + worksheet.story_title + "：" + (worksheet.scene_intro or "")),
+            s_note,
+        ))
+        story.append(Spacer(1, 4))
+
     if worksheet.learning_objective:
         story.append(Paragraph(_pdf_clean_text("学习目标：" + worksheet.learning_objective), s_note))
     if worksheet.memory_note:
@@ -1055,8 +1139,10 @@ def worksheet_to_pdf(worksheet: "GeneratedWorksheet") -> bytes:
         if worksheet.config.include_answer_key and answer not in (None, ""):
             ans_txt = "（答案：" + str(answer) + "）"
         emoji = getattr(prob, "emoji", "") or ""
+        op_tag = ("[操作：" + prob.operation + "] ") if prob.operation else ""
+        scen_tag = ("📌 " + prob.scenario + " ") if prob.scenario else ""
         group.append(Paragraph(
-            _pdf_clean_text(str(prob.number) + ". " + str(emoji) + " " + str(prob.prompt) + " " + ans_txt),
+            _pdf_clean_text(str(prob.number) + ". " + op_tag + scen_tag + str(emoji) + " " + str(prob.prompt) + " " + ans_txt),
             s_problem,
         ))
         if len(group) >= 4 or i == len(worksheet.problems) - 1:
@@ -1064,14 +1150,21 @@ def worksheet_to_pdf(worksheet: "GeneratedWorksheet") -> bytes:
             story.append(Spacer(1, 8))
             group = []
 
+    # 降级/提示说明
+    if worksheet.generation_note:
+        story.append(Spacer(1, 6))
+        story.append(Paragraph(_pdf_clean_text("ℹ️ " + worksheet.generation_note), s_note))
+
     # 答案区
     if worksheet.config.include_answer_key and worksheet.answer_key:
         story.append(Spacer(1, 6))
         story.append(Paragraph(_pdf_clean_text("参考答案"), s_answer))
-        ans_lines = []
+        # 每条答案一行（Paragraph 自动换行，避免长答案截断）
         for num in sorted(worksheet.answer_key.keys()):
-            ans_lines.append(str(num) + ". " + str(worksheet.answer_key[num]))
-        story.append(Preformatted(_pdf_clean_text("   ".join(ans_lines)), s_answer))
+            story.append(Paragraph(
+                _pdf_clean_text(str(num) + ". " + str(worksheet.answer_key[num])),
+                s_answer,
+            ))
 
     # 完成奖励
     story.append(Spacer(1, 10))

@@ -18,6 +18,7 @@ Page({
     dimOptions: DIM_OPTIONS,
     generating: false,
     exporting: false,
+    scenario: "",
     previewText: "",
     error: "",
   },
@@ -46,13 +47,18 @@ Page({
     this.setData({ selectedDims: dims });
   },
 
+  onScenarioInput(e) {
+    this.setData({ scenario: e.detail.value || "" });
+  },
+
   async generate() {
     this.setData({ generating: true, error: "", previewText: "" });
     try {
-      const res = await api.generateWorksheet({
+      const res = await api.generateWorksheetPost({
         age_group: AGE_GROUPS[this.data.ageIndex],
         difficulty: this.data.difficulty,
         dimensions: this.data.selectedDims.join(","),
+        activity_theme: this.data.scenario,
         format: "markdown",
       });
       const markdown = res?.markdown || "";
@@ -94,6 +100,7 @@ Page({
         age_group: AGE_GROUPS[this.data.ageIndex],
         difficulty: this.data.difficulty,
         dimensions: this.data.selectedDims.join(","),
+        activity_theme: this.data.scenario,
         include_answer: true,
       });
       // res: { filename, content_base64 }（JSON 通道，见 api.generateWorksheetPdf 注释）

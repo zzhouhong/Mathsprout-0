@@ -291,16 +291,26 @@ module.exports = {
     return request("/worksheets/generate?" + qs, { auth: true, showLoading: true });
   },
 
+  // POST 版生成：活动情境（长文本）走 body，避免 URL 长度/编码问题
+  generateWorksheetPost: (params) =>
+    request("/worksheets/generate", {
+      method: "POST",
+      auth: true,
+      showLoading: true,
+      data: params,
+    }),
+
   // 导出操作单 PDF（base64 JSON 通道）
   // 注：不用 callContainer 二进制响应——对 application/pdf 的兼容性在部分
   // 基础库/开发者工具版本不稳（res.data 可能为 string/null）；JSON+base64
   // 全版本稳，小程序端用 wx.base64ToArrayBuffer 解码写文件
   generateWorksheetPdf: (params) => {
-    const qs = Object.keys(params)
-      .filter((k) => params[k] !== undefined && params[k] !== null && params[k] !== "")
-      .map((k) => encodeURIComponent(k) + "=" + encodeURIComponent(params[k]))
-      .join("&");
-    const qs2 = qs + (qs ? "&" : "") + "format=pdf_base64";
-    return request("/worksheets/generate?" + qs2, { auth: true, showLoading: true });
+    // 走 POST（与生成一致，可携带 activity_theme 长文本）
+    return request("/worksheets/generate", {
+      method: "POST",
+      auth: true,
+      showLoading: true,
+      data: { ...params, format: "pdf_base64" },
+    });
   },
 };
