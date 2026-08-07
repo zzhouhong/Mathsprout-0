@@ -980,6 +980,7 @@ async def generate_worksheet_endpoint(
     format: str = Query(default="html"),
     child_id: Optional[int] = Query(default=None),
     auto_difficulty: bool = Query(default=False),
+    activity_theme: Optional[str] = Query(default=None),
     db = Depends(get_db),
 ):
     """
