@@ -32,6 +32,11 @@ settings = get_settings()
 
 MAX_ACTIVITY_THEME_LENGTH = 300
 
+# 操作单生成用文本模型：MiniMax-Text-01（无 think 推理块，JSON 稳定、~16s）
+# 注意不能用 M2/M3（think 块占 token 导致 JSON 截断）；也不用 settings.MINIMAX_MODEL
+#（那个是视觉识别用的 MiniMax-M3）
+AI_GENERATION_MODEL = "MiniMax-Text-01"
+
 # 年龄 → 数量上限（《指南》目标）
 AGE_QUANTITY_LIMIT = {"small": 5, "middle": 10, "large": 20}
 
@@ -84,7 +89,7 @@ def _system_prompt() -> str:
         "按「完整儿童活动课程」的理念，为幼儿设计【给孩子动手用的纸面操作单】。\n"
         "设计原则：\n"
         "1. 用一条故事线和一个固定卡通角色贯穿整张操作单，每个任务都是故事里的一个小任务。\n"
-        "2. 每题的操作类型只能从以下选一种：" + ops + "。\n"
+        "2. 每题的操作类型必须从以下清单中选一个，只能填：涂色、圈画、描线、配对、找一找、按规律续、点数（不要发明其他词，如「选择」「挑选」都不行）。\n"
         "   操作指令必须描述清楚孩子在纸上要做的具体动作，例如：\n"
         "   - 涂色：把三角形都涂上红色\n"
         "   - 圈画：用笔圈出数量是3的那一组萝卜\n"
@@ -142,14 +147,15 @@ async def _call_minimax_text(system_prompt: str, user_prompt: str) -> str:
     for attempt in range(2):  # 仅网络类错误重试 1 次
         try:
             resp = await client.chat.completions.create(
-                model=settings.MINIMAX_MODEL,
+                model=AI_GENERATION_MODEL,
                 messages=[
                     {"role": "system", "content": system_prompt},
                     {"role": "user", "content": user_prompt},
                 ],
-                max_tokens=2048,
+                max_tokens=4096,
                 timeout=settings.MINIMAX_TIMEOUT_SECONDS,
-                response_format={"type": "json_object"},
+                # 注：MiniMax-Text-01 不支持 response_format json_object，
+                # 靠 prompt 强约束 + _extract_json 容错
             )
         except Exception as e:
             err_str = str(e)

@@ -7,6 +7,7 @@ import os
 import json
 import asyncio
 import logging
+import time
 from typing import Optional
 
 from app.core.config import get_settings
@@ -944,6 +945,88 @@ class WorksheetGenerateRequest(BaseModel):
     format: str = "markdown"
     activity_theme: Optional[str] = None
     child_id: Optional[int] = None
+
+
+# ─── 异步生成任务（AI 情境化生成耗时 20-40s，超过 callContainer 15s 上限，
+#      故走「立即返回 task_id + 轮询」模式；模板模式仍同步返回） ──────────
+_AI_TASKS: dict = {}          # task_id -> {status, result, error, created_at}
+_AI_TASK_TTL_SECONDS = 600    # 任务结果保留 10 分钟
+_ai_task_lock = asyncio.Lock()
+
+
+async def _run_ai_generation_task(task_id: str, config, child_memory):
+    """后台执行 AI 生成，结果写入 _AI_TASKS。"""
+    try:
+        from app.services.worksheet_generator import worksheet_to_markdown, worksheet_to_pdf
+        import base64
+        worksheet = await _generate_worksheet_payload(config, child_memory)
+        md = worksheet_to_markdown(worksheet)
+        pdf_b64 = base64.b64encode(worksheet_to_pdf(worksheet)).decode("ascii")
+        result = {"markdown": md, "pdf_base64": pdf_b64,
+                  "story_title": worksheet.story_title,
+                  "mascot_name": worksheet.mascot_name,
+                  "generation_mode": worksheet.generation_mode,
+                  "generation_note": worksheet.generation_note}
+        async with _ai_task_lock:
+            _AI_TASKS[task_id] = {"status": "completed", "result": result,
+                                  "error": None, "created_at": time.time()}
+    except Exception as exc:  # noqa: BLE001 - 任务失败要记录并回报
+        logger.exception("AI generation task %s failed", task_id)
+        async with _ai_task_lock:
+            _AI_TASKS[task_id] = {"status": "failed", "result": None,
+                                  "error": str(exc)[:300], "created_at": time.time()}
+
+
+def _cleanup_ai_tasks():
+    """清理过期任务。"""
+    now = time.time()
+    expired = [k for k, v in _AI_TASKS.items()
+               if now - v.get("created_at", 0) > _AI_TASK_TTL_SECONDS]
+    for k in expired:
+        _AI_TASKS.pop(k, None)
+
+
+@router.post("/generate-async")
+async def create_generate_task(body: WorksheetGenerateRequest, db = Depends(get_db)):
+    """创建异步生成任务，立即返回 task_id（AI 情境化生成专用）。"""
+    from app.services.worksheet_generator import WorksheetConfig
+    from app.services.memory_service import build_child_memory
+    import uuid
+
+    dim_list = [d.strip() for d in body.dimensions.split(",") if d.strip()]
+    child_memory = None
+    if body.child_id is not None:
+        child_memory = await build_child_memory(db, body.child_id)
+    config = WorksheetConfig(
+        child_name=body.child_name,
+        age_group=body.age_group.value,
+        difficulty_level=body.difficulty,
+        dimensions=dim_list,
+        problem_count=body.problem_count,
+        include_answer_key=body.include_answer,
+        activity_theme=(body.activity_theme or "").strip() or None,
+    )
+    task_id = uuid.uuid4().hex[:16]
+    _cleanup_ai_tasks()
+    async with _ai_task_lock:
+        _AI_TASKS[task_id] = {"status": "pending", "result": None,
+                              "error": None, "created_at": time.time()}
+    asyncio.create_task(_run_ai_generation_task(task_id, config, child_memory))
+    return JSONResponse(content={"task_id": task_id, "status": "pending"})
+
+
+@router.get("/generate-async/status")
+async def get_generate_task_status(task_id: str = Query(...)):
+    """查询异步生成任务状态。"""
+    _cleanup_ai_tasks()
+    task = _AI_TASKS.get(task_id)
+    if not task:
+        return JSONResponse(content={"status": "not_found"})
+    return JSONResponse(content={
+        "status": task["status"],
+        "result": task["result"],
+        "error": task["error"],
+    })
 
 
 @router.post("/generate")

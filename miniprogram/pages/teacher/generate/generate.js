@@ -20,6 +20,7 @@ Page({
     exporting: false,
     scenario: "",
     previewText: "",
+    lastResult: null, // 最近一次生成结果（含 pdf_base64，供导出用）
     error: "",
   },
 
@@ -51,28 +52,56 @@ Page({
     this.setData({ scenario: e.detail.value || "" });
   },
 
+  // 轮询等待异步生成任务（AI 情境化生成需 20-30s，callContainer 15s 会超时）
+  async _waitGenerateTask(taskId) {
+    for (let i = 0; i < 50; i++) {
+      await new Promise((res) => setTimeout(res, 2000));
+      const st = await api.getGenerateTaskStatus(taskId);
+      if (st.status === "completed") return st.result;
+      if (st.status === "failed") throw new Error(st.error || "AI 生成失败，请重试");
+      if (st.status === "not_found") throw new Error("生成任务不存在，请重试");
+    }
+    throw new Error("AI 生成超时，请重试");
+  },
+
+  _markdownToPreview(markdown) {
+    return (markdown || "")
+      .replace(/^#{1,6}\s*/gm, "")
+      .replace(/\*\*(.*?)\*\*/g, "$1")
+      .replace(/^>\s?/gm, "")
+      .replace(/^---+$/gm, "")
+      .replace(/\n{3,}/g, "\n\n")
+      .trim();
+  },
+
   async generate() {
     this.setData({ generating: true, error: "", previewText: "" });
     try {
-      const res = await api.generateWorksheetPost({
+      const params = {
         age_group: AGE_GROUPS[this.data.ageIndex],
         difficulty: this.data.difficulty,
         dimensions: this.data.selectedDims.join(","),
         activity_theme: this.data.scenario,
         format: "markdown",
-      });
-      const markdown = res?.markdown || "";
-      const previewText = markdown
-        .replace(/^#{1,6}\s*/gm, "")
-        .replace(/\*\*(.*?)\*\*/g, "$1")
-        .replace(/^>\s?/gm, "")
-        .replace(/^---+$/gm, "")
-        .replace(/\n{3,}/g, "\n\n")
-        .trim();
+      };
+      let result;
+      if (this.data.scenario && this.data.scenario.trim()) {
+        // AI 情境化：创建异步任务 + 轮询（耗时 20-30s）
+        const { task_id } = await api.createGenerateTask(params);
+        result = await this._waitGenerateTask(task_id);
+      } else {
+        // 无情境：同步快速生成
+        result = await api.generateWorksheetPost(params);
+      }
+      const markdown = (result && (result.markdown || result.markdown_res)) || "";
+      const previewText = this._markdownToPreview(markdown);
       if (!previewText) {
         throw new Error("操作单内容为空，请重试");
       }
-      this.setData({ previewText });
+      this.setData({
+        previewText,
+        lastResult: result,
+      });
     } catch (e) {
       this.setData({ error: e.message || "生成失败，请重试" });
     } finally {
@@ -96,18 +125,31 @@ Page({
     }
     this.setData({ exporting: true });
     try {
-      const res = await api.generateWorksheetPdf({
-        age_group: AGE_GROUPS[this.data.ageIndex],
-        difficulty: this.data.difficulty,
-        dimensions: this.data.selectedDims.join(","),
-        activity_theme: this.data.scenario,
-        include_answer: true,
-      });
-      // res: { filename, content_base64 }（JSON 通道，见 api.generateWorksheetPdf 注释）
-      if (!res || !res.content_base64) {
+      // 优先用最近一次生成结果的 pdf_base64（异步任务已含）；没有则同步请求
+      let contentBase64 = this.data.lastResult && this.data.lastResult.pdf_base64;
+      if (!contentBase64) {
+        const params = {
+          age_group: AGE_GROUPS[this.data.ageIndex],
+          difficulty: this.data.difficulty,
+          dimensions: this.data.selectedDims.join(","),
+          activity_theme: this.data.scenario,
+          include_answer: true,
+        };
+        let taskResult;
+        if (this.data.scenario && this.data.scenario.trim()) {
+          // 有情境：异步任务（同步请求会超 15s）
+          const { task_id } = await api.createGenerateTask(params);
+          taskResult = await this._waitGenerateTask(task_id);
+          contentBase64 = taskResult && taskResult.pdf_base64;
+        } else {
+          const res = await api.generateWorksheetPdf(params);
+          contentBase64 = res && res.content_base64;
+        }
+      }
+      if (!contentBase64) {
         throw new Error("导出失败：未获取到文件数据");
       }
-      const arrayBuffer = wx.base64ToArrayBuffer(res.content_base64);
+      const arrayBuffer = wx.base64ToArrayBuffer(contentBase64);
       const fs = wx.getFileSystemManager();
       const tmp = wx.env.USER_DATA_PATH + "/worksheet_" + Date.now() + ".pdf";
       fs.writeFileSync(tmp, arrayBuffer, "binary");

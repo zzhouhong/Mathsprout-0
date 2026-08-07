@@ -369,7 +369,14 @@ def worksheet_to_markdown(worksheet: GeneratedWorksheet) -> str:
         data = p.data
         if "items" in data and isinstance(data["items"], list):
             display_items = data["items"][:15]  # Limit for display
-            lines.append(f"> {'  '.join(display_items)}")
+            # 兼容 dict 型 items（如 sort_by_attribute 的 {name, emoji, rank}）
+            shown = []
+            for it in display_items:
+                if isinstance(it, dict):
+                    shown.append(it.get("emoji") or it.get("name") or "")
+                else:
+                    shown.append(str(it))
+            lines.append(f"> {'  '.join(shown)}")
         elif "group_a" in data and "group_b" in data:
             ga = data["group_a"]
             gb = data["group_b"]
@@ -729,11 +736,13 @@ def worksheet_to_html(worksheet: GeneratedWorksheet) -> str:
         # Fallback: emoji display if no SVG available
         if not cartoon_svg:
             if "items" in data and isinstance(data["items"], list):
-                items = "".join(
-                    f'<span class="item-emoji">{item}</span>'
-                    for item in data["items"][:12]
-                )
-                visual_html = f'<div class="visual-items">{items}</div>'
+                item_spans = []
+                for item in data["items"][:12]:
+                    if isinstance(item, dict):
+                        item_spans.append(f'<span class="item-emoji">{item.get("emoji") or item.get("name") or ""}</span>')
+                    else:
+                        item_spans.append(f'<span class="item-emoji">{item}</span>')
+                visual_html = f'<div class="visual-items">{"".join(item_spans)}</div>'
             elif "group_a" in data and "group_b" in data:
                 ga = data["group_a"]
                 gb = data["group_b"]

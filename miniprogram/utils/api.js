@@ -302,6 +302,22 @@ module.exports = {
       data: params,
     }),
 
+  // ─── 异步生成任务（AI 情境化生成 20-30s，超过 callContainer 15s 上限，
+  //      走「创建任务 + 轮询」模式） ───────────────
+  createGenerateTask: (params) =>
+    request("/worksheets/generate-async", {
+      method: "POST",
+      auth: true,
+      showLoading: false,
+      data: params,
+    }),
+
+  getGenerateTaskStatus: (taskId) =>
+    request("/worksheets/generate-async/status?task_id=" + taskId, {
+      auth: true,
+      showLoading: false,
+    }),
+
   // 导出操作单 PDF（base64 JSON 通道）
   // 注：不用 callContainer 二进制响应——对 application/pdf 的兼容性在部分
   // 基础库/开发者工具版本不稳（res.data 可能为 string/null）；JSON+base64
