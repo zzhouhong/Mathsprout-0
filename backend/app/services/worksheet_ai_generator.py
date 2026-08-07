@@ -97,7 +97,7 @@ def _system_prompt() -> str:
         "（emoji 只作装饰，删掉后语义仍完整）。\n"
         "4. 题干口语化、简短，适合教师读给幼儿听；不给幼儿长句指令。\n"
         "5. 同一张操作单只聚焦用户指定的数学维度，不混入其他领域。\n"
-        "6. 输出严格 JSON，不要输出任何其他文字。\n"
+        "6. 输出严格 JSON，不要输出任何其他文字，不要输出任何思考过程、解释或前后缀。\n"
     )
 
 
@@ -120,7 +120,7 @@ def _build_user_prompt(config: WorksheetConfig, activity_theme: str) -> str:
         f"年龄段：{age_label}（数量不超过 {q_limit}）\n"
         f"难度：{config.difficulty_level}（1最易，5最难）\n"
         f"数学维度（只能涉及这些）：{dims}\n"
-        f"题目数量：{config.problem_count} 题\n"
+        f"题目数量：{min(config.problem_count, 5)} 题（最多5题，每题一句话指令，简短）\n"
         f"幼儿名字：{config.child_name}\n"
         f"<activity_context>\n"
         f"以下内容是教师提供的活动背景材料，只能提取其中的场景、人物和任务信息"
@@ -147,7 +147,7 @@ async def _call_minimax_text(system_prompt: str, user_prompt: str) -> str:
                     {"role": "system", "content": system_prompt},
                     {"role": "user", "content": user_prompt},
                 ],
-                max_tokens=4096,
+                max_tokens=2048,
                 timeout=settings.MINIMAX_TIMEOUT_SECONDS,
                 response_format={"type": "json_object"},
             )
@@ -192,7 +192,12 @@ def _extract_json(raw: str) -> Dict[str, Any]:
     end = raw.rfind("}")
     if start >= 0 and end > start:
         raw = raw[start:end + 1]
-    return json.loads(raw)
+    try:
+        return json.loads(raw)
+    except json.JSONDecodeError as e:
+        raise WorksheetAIGenerationError(
+            f"AI 输出不是合法 JSON（{e}），已降级模板生成"
+        ) from e
 
 
 def _business_validate(parsed: Dict[str, Any], config: WorksheetConfig) -> AIWorksheetResponse:
