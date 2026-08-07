@@ -16,18 +16,41 @@
     <slider min="1" max="5" step="1" value="{{difficulty}}" show-value bindchange="onDifficultyChange" activeColor="#4F46E5" />
   </view>
 
-  <!-- 维度选择 -->
+  <!-- 能力主题（单选，AI 按主题严格生成） -->
   <view class="field">
-    <text class="label">练习维度</text>
+    <text class="label">🎯 能力主题</text>
     <view class="dim-grid">
       <view
-        class="dim-chip {{selectedDims.indexOf(item.key) >= 0 ? 'dim-chip-active' : ''}}"
-        wx:for="{{dimOptions}}"
+        class="dim-chip {{themeKey === item.key ? 'dim-chip-active' : ''}}"
+        wx:for="{{themeOptions}}"
         wx:key="key"
-        data-dim="{{item.key}}"
-        bindtap="onDimToggle"
+        data-theme="{{item.key}}"
+        bindtap="onThemeSelect"
       >{{item.label}}</view>
     </view>
+  </view>
+
+  <!-- 难度阶梯（每主题 1/2/3，建议上次已完成难度+1） -->
+  <view class="field">
+    <text class="label">📶 难度阶梯</text>
+    <view class="dim-grid">
+      <view
+        class="dim-chip {{difficulty === 1 ? 'dim-chip-active' : ''}}"
+        data-diff="1"
+        bindtap="onDifficultySelect"
+      >难度1·基础</view>
+      <view
+        class="dim-chip {{difficulty === 2 ? 'dim-chip-active' : ''}}"
+        data-diff="2"
+        bindtap="onDifficultySelect"
+      >难度2·进阶</view>
+      <view
+        class="dim-chip {{difficulty === 3 ? 'dim-chip-active' : ''}}"
+        data-diff="3"
+        bindtap="onDifficultySelect"
+      >难度3·挑战</view>
+    </view>
+    <view class="hint" wx:if="{{suggestHint}}">{{suggestHint}}</view>
   </view>
 
   <!-- 活动情境描述（选填） -->
@@ -42,6 +65,9 @@
     ></textarea>
     <view class="hint">{{scenario.length}}/300 · 留空则生成标准情境操作单</view>
   </view>
+
+  <!-- 历史记录入口 -->
+  <button class="history-btn" bindtap="goRecords">📋 历史操作单</button>
 
   <!-- 生成按钮 -->
   <button class="btn-primary" bindtap="generate" loading="{{generating}}" disabled="{{generating}}">

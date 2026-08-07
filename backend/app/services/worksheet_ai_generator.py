@@ -22,6 +22,11 @@ from pydantic import BaseModel, ValidationError
 
 from app.core.config import get_settings
 from app.services.interactive_content.scenarios import SUPPORTED_OPERATIONS
+from app.services.interactive_content.themes import (
+    MATH_THEMES,
+    OPERATION_KINDS,
+    DEFAULT_VISUAL_BY_OPERATION,
+)
 from app.services.worksheet_generator import (
     GeneratedWorksheet,
     WorksheetConfig,
@@ -124,6 +129,18 @@ def _build_user_prompt(config: WorksheetConfig, activity_theme: str) -> str:
     )
     dims = "、".join(DIM_LABELS.get(d, d) for d in config.dimensions)
     q_limit = AGE_QUANTITY_LIMIT.get(config.age_group, 10)
+    # 能力主题 + 难度阶梯
+    theme_info = ""
+    theme_key = getattr(config, "theme", "") or ""
+    if theme_key and theme_key in MATH_THEMES:
+        th = MATH_THEMES[theme_key]
+        diff_desc = th["difficulties"].get(config.difficulty_level, "")
+        theme_info = (
+            f"能力主题：{th['label']}（{th['desc']}）\n"
+            f"难度阶梯：难度{config.difficulty_level}——{diff_desc}\n"
+            f"【必须】所有题只能围绕「{th['label']}」这一个主题生成，"
+            f"不得混入其他数学内容。\n"
+        )
     json_schema = (
         '{"story_title": "故事标题", "scene_intro": "一段给幼儿的情境引言", '
         '"mascot_name": "固定角色名", "learning_objective": "学习目标", '
@@ -137,7 +154,8 @@ def _build_user_prompt(config: WorksheetConfig, activity_theme: str) -> str:
         f"年龄段：{age_label}（数量不超过 {q_limit}）\n"
         f"难度：{config.difficulty_level}（1最易，5最难）\n"
         f"数学维度（只能涉及这些）：{dims}\n"
-        f"题目数量：{min(config.problem_count, 5)} 题（最多5题，每题一句话指令，简短）\n"
+        f"{theme_info}"
+        f"题目数量：{min(config.problem_count, 2)} 题（每次2题，难度相同，每题一句话指令，简短）\n"
         f"幼儿名字：{config.child_name}\n"
         f"<activity_context>\n"
         f"以下内容是教师提供的活动背景材料，只能提取其中的场景、人物和任务信息"
@@ -225,7 +243,7 @@ def _business_validate(parsed: Dict[str, Any], config: WorksheetConfig) -> AIWor
         raise WorksheetAIGenerationError(f"AI 输出结构不合法: {str(e)[:200]}")
     if not resp.problems:
         raise WorksheetAIGenerationError("AI 输出 problems 为空")
-    if len(resp.problems) < max(4, config.problem_count // 2):
+    if len(resp.problems) < config.problem_count:
         raise WorksheetAIGenerationError(f"AI 输出题目数不足（{len(resp.problems)}/{config.problem_count}）")
     q_limit = AGE_QUANTITY_LIMIT.get(config.age_group, 10)
     for p in resp.problems:
@@ -238,7 +256,22 @@ def _business_validate(parsed: Dict[str, Any], config: WorksheetConfig) -> AIWor
         nums = [int(n) for n in re.findall(r"\d+", p.prompt + p.correct_answer)]
         if nums and max(nums) > q_limit:
             raise WorksheetAIGenerationError(f"AI 题目数量超出年龄上限（{max(nums)}>{q_limit}）")
+    _repair_visuals(resp)
     return resp
+
+
+def _repair_visuals(resp: AIWorksheetResponse) -> None:
+    """视觉一致性修复：visual.kind 必须与 operation 匹配，否则按操作重写默认图形。
+
+    解决"题目说香蕉哪边多、图形却是圆形"这类图文不符问题。
+    """
+    for p in resp.problems:
+        vis = p.visual if isinstance(p.visual, dict) else None
+        ok_kinds = OPERATION_KINDS.get(p.operation, ())
+        kind = vis.get("kind") if vis else None
+        if kind not in ok_kinds:
+            # 不匹配或缺失 → 用该操作类型的默认图形骨架
+            p.visual = DEFAULT_VISUAL_BY_OPERATION.get(p.operation, {"kind": "dots", "count": 5})
 
 
 def _to_worksheet(resp: AIWorksheetResponse, config: WorksheetConfig) -> GeneratedWorksheet:
@@ -280,8 +313,8 @@ def _to_worksheet(resp: AIWorksheetResponse, config: WorksheetConfig) -> Generat
 async def generate_worksheet_with_ai(config: WorksheetConfig, activity_theme: str) -> GeneratedWorksheet:
     """AI 情境化生成入口。任何失败抛 WorksheetAIGenerationError。"""
     theme = (activity_theme or "").strip()
-    if not theme:
-        raise WorksheetAIGenerationError("activity_theme 为空，不需要 AI 生成")
+    if not theme and not (config.theme or "").strip():
+        raise WorksheetAIGenerationError("activity_theme/theme 均为空，不需要 AI 生成")
     if len(theme) > MAX_ACTIVITY_THEME_LENGTH:
         raise WorksheetAIGenerationError(f"活动情境请控制在 {MAX_ACTIVITY_THEME_LENGTH} 字以内")
     raw = await _call_minimax_text(_system_prompt(), _build_user_prompt(config, theme))

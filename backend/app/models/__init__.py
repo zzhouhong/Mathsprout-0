@@ -14,6 +14,7 @@ from app.models.child import Child
 from app.models.worksheet import Worksheet, AnalysisResult, ProblemResult
 from app.models.assessment import AbilityAssessment
 from app.models.report import Report, AIRequestLog, ReportAnnotation
+from app.models.worksheet_record import WorksheetRecord
 
 __all__ = [
     "AgeGroupEnum", "UploadMethodEnum", "WorksheetStatusEnum",

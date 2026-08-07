@@ -46,6 +46,7 @@ class WorksheetConfig:
     show_example: bool = True
     learning_objective: str = ""        # Printed on worksheet, e.g. "感知三角形的多种变式"
     activity_theme: str = ""            # 教师输入的活动情境（如"春游时小兔分萝卜"）；非空走 AI 情境化生成
+    theme: str = ""                     # 能力主题（count/sort/compare/composition/classify/pattern/measure/shape/space）
 
 
 @dataclass
@@ -344,6 +345,8 @@ def _visual_markdown(prob) -> str:
         left = "  ".join("●" for _ in (visual.get("left") or [])[:10])
         right = "  ".join("●" for _ in (visual.get("right") or [])[:10])
         return left + "\n" + right
+    if kind == "path":
+        return "★ ╌╌╌╌╌ ╌╌╌╌╌ ╌╌╌╌╌ ▢"
     return ""
 
 
@@ -754,6 +757,16 @@ def _visual_svg_html(prob) -> str:
         for i, it in enumerate(right[:10]):
             parts.append(f'<circle cx="{16 + i * 30 + 9}" cy="22" r="9" fill="{items_map.get(it, "#1E88E5")}" stroke="#333" stroke-width="1.2"/>')
         return f'<svg width="{w}" height="96" viewBox="0 0 {w} 96" xmlns="http://www.w3.org/2000/svg">{"".join(parts)}</svg>'
+
+    if kind == "path":
+        # 虚线路径（描线题）
+        return ('<svg width="360" height="60" viewBox="0 0 360 60" xmlns="http://www.w3.org/2000/svg">'
+                '<line x1="20" y1="30" x2="150" y2="30" stroke="#999" stroke-width="3" stroke-dasharray="6,5"/>'
+                '<line x1="150" y1="30" x2="260" y2="45" stroke="#999" stroke-width="3" stroke-dasharray="6,5"/>'
+                '<line x1="260" y1="45" x2="340" y2="22" stroke="#999" stroke-width="3" stroke-dasharray="6,5"/>'
+                '<circle cx="20" cy="30" r="5" fill="#FFD54F" stroke="#333" stroke-width="1.2"/>'
+                '<rect x="330" y="12" width="14" height="14" fill="#4FC3F7" stroke="#333" stroke-width="1.2"/>'
+                '</svg>')
 
     return ""
 
@@ -1246,6 +1259,23 @@ def _pdf_visual_drawing(prob):
         for i, it in enumerate(right[:10]):
             col = colors.HexColor(_PDF_ITEM_COLORS.get(it, "#1E88E5"))
             d.add(Circle(16 + i * 30, 22, 9, fillColor=col, strokeColor=stroke, strokeWidth=1))
+        return d
+
+    if kind == "path":
+        # 虚线路径（描线题）：S 形虚线 + 起点/终点小图标
+        from reportlab.graphics.shapes import Line
+        d = Drawing(360, 60)
+        d.add(Line(20, 30, 150, 30, strokeColor=colors.HexColor("#999999"),
+                   strokeWidth=3, strokeDashArray=(6, 5)))
+        d.add(Line(150, 30, 260, 45, strokeColor=colors.HexColor("#999999"),
+                   strokeWidth=3, strokeDashArray=(6, 5)))
+        d.add(Line(260, 45, 340, 22, strokeColor=colors.HexColor("#999999"),
+                   strokeWidth=3, strokeDashArray=(6, 5)))
+        # 起点星星、终点小房子（用简单图形示意）
+        d.add(Circle(20, 30, 5, fillColor=colors.HexColor("#FFD54F"),
+                     strokeColor=stroke, strokeWidth=1))
+        d.add(Rect(330, 12, 14, 14, fillColor=colors.HexColor("#4FC3F7"),
+                   strokeColor=stroke, strokeWidth=1))
         return d
 
     return None

@@ -915,8 +915,8 @@ async def _generate_worksheet_payload(config, child_memory=None):
     )
 
     logger = logging.getLogger(__name__)
-    if config.activity_theme:
-        theme = config.activity_theme
+    if config.activity_theme or config.theme:
+        theme = config.activity_theme or ""
         if len(theme) > MAX_ACTIVITY_THEME_LENGTH:
             from fastapi import HTTPException
             raise HTTPException(
@@ -935,6 +935,120 @@ async def _generate_worksheet_payload(config, child_memory=None):
     return generate_worksheet(config, child_memory=child_memory)
 
 
+async def _persist_worksheet_record(db, config, worksheet, fmt: str = "markdown"):
+    """生成完成后自动记录（主题/难度/内容/PDF），供历史查看与难度推进。失败不阻断。"""
+    try:
+        from app.models.worksheet_record import WorksheetRecord
+        from app.services.worksheet_generator import worksheet_to_pdf, worksheet_to_markdown
+        import base64
+
+        pdf_b64 = None
+        try:
+            pdf_b64 = base64.b64encode(worksheet_to_pdf(worksheet)).decode("ascii")
+        except Exception:
+            pdf_b64 = None
+        record = WorksheetRecord(
+            theme=(config.theme or "").strip() or "general",
+            difficulty=config.difficulty_level,
+            age_group=config.age_group,
+            child_name=config.child_name,
+            story_title=worksheet.story_title or worksheet.title,
+            generation_mode=worksheet.generation_mode,
+            markdown=worksheet_to_markdown(worksheet),
+            pdf_base64=pdf_b64,
+            activity_theme=config.activity_theme or "",
+        )
+        db.add(record)
+        await db.commit()
+    except Exception as exc:  # noqa: BLE001 - 记录失败不影响生成主流程
+        logger.warning("persist worksheet record failed: %s", exc)
+
+
+@router.get("/records")
+async def list_worksheet_records(
+    theme: Optional[str] = Query(default=None),
+    limit: int = Query(default=20, ge=1, le=100),
+    db = Depends(get_db),
+):
+    """操作单生成记录列表（可按主题筛选）。"""
+    from sqlalchemy import select
+    from app.models.worksheet_record import WorksheetRecord
+
+    stmt = select(WorksheetRecord).order_by(WorksheetRecord.id.desc()).limit(limit)
+    if theme:
+        stmt = stmt.where(WorksheetRecord.theme == theme)
+    rows = (await db.execute(stmt)).scalars().all()
+    return JSONResponse(content={
+        "records": [
+            {
+                "id": r.id,
+                "theme": r.theme,
+                "difficulty": r.difficulty,
+                "age_group": r.age_group,
+                "child_name": r.child_name,
+                "story_title": r.story_title,
+                "generation_mode": r.generation_mode,
+                "activity_theme": r.activity_theme,
+                "created_at": r.created_at.isoformat() if r.created_at else None,
+            }
+            for r in rows
+        ]
+    })
+
+
+@router.get("/records/{record_id}")
+async def get_worksheet_record(record_id: int, db = Depends(get_db)):
+    """单条记录详情（含 markdown + pdf_base64）。"""
+    from sqlalchemy import select
+    from app.models.worksheet_record import WorksheetRecord
+
+    row = (await db.execute(
+        select(WorksheetRecord).where(WorksheetRecord.id == record_id)
+    )).scalar_one_or_none()
+    if not row:
+        return JSONResponse(content={"error": "record not found"}, status_code=404)
+    return JSONResponse(content={
+        "id": row.id,
+        "theme": row.theme,
+        "difficulty": row.difficulty,
+        "age_group": row.age_group,
+        "child_name": row.child_name,
+        "story_title": row.story_title,
+        "generation_mode": row.generation_mode,
+        "markdown": row.markdown,
+        "pdf_base64": row.pdf_base64,
+        "created_at": row.created_at.isoformat() if row.created_at else None,
+    })
+
+
+@router.get("/themes")
+async def list_themes(db = Depends(get_db)):
+    """能力主题列表 + 每主题已完成的最高难度（供「建议难度X+1」）。"""
+    from sqlalchemy import select, func as safunc
+    from app.models.worksheet_record import WorksheetRecord
+    from app.services.interactive_content.themes import MATH_THEMES
+
+    # 每主题最高难度
+    rows = (await db.execute(
+        select(WorksheetRecord.theme, safunc.max(WorksheetRecord.difficulty))
+        .group_by(WorksheetRecord.theme)
+    )).all()
+    max_diff = {k: v for k, v in rows}
+
+    themes = []
+    for key, th in MATH_THEMES.items():
+        done = max_diff.get(key, 0)
+        themes.append({
+            "key": key,
+            "label": th["label"],
+            "desc": th["desc"],
+            "max_done_difficulty": done or 0,
+            "suggest_difficulty": min(done + 1, 3) if done else 1,
+            "difficulties": th["difficulties"],
+        })
+    return JSONResponse(content={"themes": themes})
+
+
 class WorksheetGenerateRequest(BaseModel):
     child_name: str = "小朋友"
     age_group: AgeGroupEnum = AgeGroupEnum.MIDDLE
@@ -944,6 +1058,7 @@ class WorksheetGenerateRequest(BaseModel):
     include_answer: bool = True
     format: str = "markdown"
     activity_theme: Optional[str] = None
+    theme: Optional[str] = None
     child_id: Optional[int] = None
 
 
@@ -967,6 +1082,26 @@ async def _run_ai_generation_task(task_id: str, config, child_memory):
                   "mascot_name": worksheet.mascot_name,
                   "generation_mode": worksheet.generation_mode,
                   "generation_note": worksheet.generation_note}
+        # 自动记录（失败不影响任务结果）
+        try:
+            from app.core.database import async_session
+            from app.models.worksheet_record import WorksheetRecord
+            async with async_session() as s:
+                rec = WorksheetRecord(
+                    theme=(config.theme or "").strip() or "general",
+                    difficulty=config.difficulty_level,
+                    age_group=config.age_group,
+                    child_name=config.child_name,
+                    story_title=worksheet.story_title or worksheet.title,
+                    generation_mode=worksheet.generation_mode,
+                    markdown=md,
+                    pdf_base64=pdf_b64,
+                    activity_theme=config.activity_theme or "",
+                )
+                s.add(rec)
+                await s.commit()
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("async persist record failed: %s", exc)
         async with _ai_task_lock:
             _AI_TASKS[task_id] = {"status": "completed", "result": result,
                                   "error": None, "created_at": time.time()}
@@ -1005,6 +1140,7 @@ async def create_generate_task(body: WorksheetGenerateRequest, db = Depends(get_
         problem_count=body.problem_count,
         include_answer_key=body.include_answer,
         activity_theme=(body.activity_theme or "").strip() or None,
+        theme=(body.theme or "").strip() or None,
     )
     task_id = uuid.uuid4().hex[:16]
     _cleanup_ai_tasks()
@@ -1047,8 +1183,10 @@ async def generate_worksheet_post(body: WorksheetGenerateRequest, db = Depends(g
         problem_count=body.problem_count,
         include_answer_key=body.include_answer,
         activity_theme=(body.activity_theme or "").strip() or None,
+        theme=(body.theme or "").strip() or None,
     )
     worksheet = await _generate_worksheet_payload(config, child_memory)
+    await _persist_worksheet_record(db, config, worksheet, body.format)
     return _render_worksheet(worksheet, body.format)
 
 

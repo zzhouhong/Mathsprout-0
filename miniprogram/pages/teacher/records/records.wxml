@@ -1,0 +1,24 @@
+<!-- pages/teacher/records/records.wxml — 历史操作单记录 -->
+<view class="container">
+  <view class="header">📋 历史操作单</view>
+
+  <view class="loading" wx:if="{{loading}}">加载中...</view>
+
+  <view class="empty" wx:if="{{!loading && records.length === 0}}">
+    还没有生成记录，去生成一张吧！
+  </view>
+
+  <view class="rec-card" wx:for="{{records}}" wx:key="id">
+    <view class="rec-head">
+      <view class="rec-title">{{item.story_title || ('主题 ' + item.theme)}}</view>
+      <view class="rec-badge">{{item.generation_mode === 'ai' ? 'AI' : '模板'}}</view>
+    </view>
+    <view class="rec-meta">
+      难度{{item.difficulty}} · {{item.activity_theme || '标准情境'}} · {{item.created_at ? item.created_at.slice(0, 10) : ''}}
+    </view>
+    <view class="rec-actions">
+      <button class="rec-btn" size="mini" data-id="{{item.id}}" bindtap="openRecord">查看 PDF</button>
+      <button class="rec-btn" size="mini" data-id="{{item.id}}" bindtap="copyRecord">复制</button>
+    </view>
+  </view>
+</view>

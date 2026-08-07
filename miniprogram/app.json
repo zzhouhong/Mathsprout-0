@@ -10,6 +10,7 @@
     "pages/teacher/class-view/class-view",
     "pages/teacher/child-detail/child-detail",
     "pages/teacher/generate/generate",
+    "pages/teacher/records/records",
     "pages/teacher/child-form/child-form"
   ],
   "window": {

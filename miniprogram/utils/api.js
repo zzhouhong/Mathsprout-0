@@ -318,6 +318,19 @@ module.exports = {
       showLoading: false,
     }),
 
+  // ─── 能力主题 & 记录留存 ───────────────────
+  getThemes: () =>
+    request("/worksheets/themes", { auth: true, showLoading: false }),
+
+  getRecords: (theme) =>
+    request("/worksheets/records" + (theme ? "?theme=" + theme : ""), {
+      auth: true,
+      showLoading: false,
+    }),
+
+  getRecord: (recordId) =>
+    request("/worksheets/records/" + recordId, { auth: true, showLoading: false }),
+
   // 导出操作单 PDF（base64 JSON 通道）
   // 注：不用 callContainer 二进制响应——对 application/pdf 的兼容性在部分
   // 基础库/开发者工具版本不稳（res.data 可能为 string/null）；JSON+base64

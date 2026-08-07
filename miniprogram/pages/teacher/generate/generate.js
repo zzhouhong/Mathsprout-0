@@ -13,15 +13,54 @@ Page({
   data: {
     ageIndex: 1,
     ageLabels: AGE_LABELS,
-    difficulty: 2,
-    selectedDims: ["counting", "shapes_space"],
-    dimOptions: DIM_OPTIONS,
+    difficulty: 1,
+    themeKey: "sort",
+    themeOptions: THEME_OPTIONS,
+    suggestHint: "",
     generating: false,
     exporting: false,
     scenario: "",
     previewText: "",
     lastResult: null, // 最近一次生成结果（含 pdf_base64，供导出用）
     error: "",
+  },
+
+  onLoad() {
+    // 拉主题进度（建议难度）
+    api.getThemes().then((res) => {
+      const themes = (res && res.themes) || [];
+      if (themes.length) {
+        this.setData({ themeOptions: themes.map((t) => ({ key: t.key, label: t.label, desc: t.desc })) });
+        const cur = themes.find((t) => t.key === this.data.themeKey) || themes[0];
+        const hint = cur.max_done_difficulty
+          ? "上次已完成难度" + cur.max_done_difficulty + "，建议难度" + cur.suggest_difficulty
+          : "从难度1开始，完成后自动记录进度";
+        this.setData({ themeKey: cur.key, difficulty: cur.suggest_difficulty || 1, suggestHint: hint });
+      }
+    }).catch(() => {});
+  },
+
+  onThemeSelect(e) {
+    const key = e.currentTarget.dataset.theme;
+    const t = this.data.themeOptions.find((x) => x.key === key);
+    this.setData({ themeKey: key, difficulty: 1, suggestHint: (t && t.desc) || "" });
+    api.getThemes().then((res) => {
+      const th = ((res && res.themes) || []).find((x) => x.key === key);
+      if (th) {
+        const hint = th.max_done_difficulty
+          ? "上次已完成难度" + th.max_done_difficulty + "，建议难度" + th.suggest_difficulty
+          : "从难度1开始，完成后自动记录进度";
+        this.setData({ difficulty: th.suggest_difficulty || 1, suggestHint: hint });
+      }
+    }).catch(() => {});
+  },
+
+  onDifficultySelect(e) {
+    this.setData({ difficulty: Number(e.currentTarget.dataset.diff) });
+  },
+
+  goRecords() {
+    wx.navigateTo({ url: "/pages/teacher/records/records" });
   },
 
   onAgeChange(e) {
@@ -80,7 +119,8 @@ Page({
       const params = {
         age_group: AGE_GROUPS[this.data.ageIndex],
         difficulty: this.data.difficulty,
-        dimensions: this.data.selectedDims.join(","),
+        dimensions: "counting,patterns,shapes_space",
+        theme: this.data.themeKey,
         activity_theme: this.data.scenario,
         format: "markdown",
       };
@@ -131,7 +171,8 @@ Page({
         const params = {
           age_group: AGE_GROUPS[this.data.ageIndex],
           difficulty: this.data.difficulty,
-          dimensions: this.data.selectedDims.join(","),
+          dimensions: "counting,patterns,shapes_space",
+          theme: this.data.themeKey,
           activity_theme: this.data.scenario,
           include_answer: true,
         };

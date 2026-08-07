@@ -1,0 +1,17 @@
+.container { padding: 24rpx; }
+.header { font-size: 36rpx; font-weight: 700; margin-bottom: 24rpx; }
+.loading { color: #94A3B8; text-align: center; padding: 60rpx 0; }
+.empty { color: #94A3B8; text-align: center; padding: 80rpx 0; }
+.rec-card {
+  background: #FFF; border-radius: 20rpx; padding: 24rpx;
+  margin-bottom: 20rpx; box-shadow: 0 2rpx 12rpx rgba(0,0,0,0.05);
+}
+.rec-head { display: flex; justify-content: space-between; align-items: center; }
+.rec-title { font-size: 30rpx; font-weight: 600; color: #1E293B; }
+.rec-badge {
+  background: #EEF2FF; color: #4F46E5; font-size: 22rpx;
+  border-radius: 999rpx; padding: 4rpx 16rpx;
+}
+.rec-meta { font-size: 24rpx; color: #94A3B8; margin: 12rpx 0; }
+.rec-actions { display: flex; gap: 16rpx; }
+.rec-btn { background: #F1F5F9; color: #334155; font-size: 24rpx; }
