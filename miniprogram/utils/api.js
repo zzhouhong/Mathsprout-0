@@ -90,6 +90,8 @@ function request(path, options = {}) {
           path: "/api/v1" + path,
           method,
           data,
+          // AI 情境化生成需 20-40s，默认 16s 会超时 102002，调大到 60s
+          timeout: 60000,
           header: {
             ...headers,
             "X-WX-SERVICE": app.globalData.cloudService,
