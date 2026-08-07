@@ -306,23 +306,46 @@ def _generate_instructions(age_group: str) -> str:
     """Generate age-appropriate instructions for the worksheet."""
     if age_group == "small":
         return (
-            "🌟 小朋友，请仔细看每一道题目。\n"
-            "数一数、圈一圈、连一连，慢慢做，不着急哦！"
+            "🌟 小朋友，跟着小动物们一起玩吧！\n"
+            "数一数、圈一圈、连一连、涂一涂，慢慢来，不着急哦！"
         )
     elif age_group == "middle":
         return (
-            "📝 请认真完成每一道题目。\n"
-            "先看清题目再作答，做完后检查一遍。加油！"
+            "🎈 和好朋友一起完成这些小任务吧！\n"
+            "先看仔细，再动手，做完给自己点个赞！"
         )
     else:
         return (
-            "📝 请独立完成以下题目。\n"
-            "注意书写工整，完成后再仔细检查一遍。\n"
-            "如有不会的题目，做好标记，结束后问老师。"
+            "🎈 每个小任务都试一试！\n"
+            "专心做完，再检查一遍，遇到不会的可以问问老师。"
         )
 
 
 # ─── Printable format helpers ─────────────────────────────────────────
+
+def _visual_markdown(prob) -> str:
+    """visual 转文本符号（markdown 预览用）。"""
+    data = prob.data if isinstance(prob.data, dict) else {}
+    visual = data.get("visual")
+    if not isinstance(visual, dict):
+        return ""
+    kind = visual.get("kind")
+    if kind == "shapes":
+        sym = {"circle": "○", "triangle": "▲", "square": "□"}
+        return "  ".join(sym.get(s, "○") for s in (visual.get("items") or [])[:8])
+    if kind == "dots":
+        return "  ".join("●" for _ in range(min(int(visual.get("count") or 0), 20)))
+    if kind == "pattern":
+        cells = []
+        for c in (visual.get("colors") or [])[:10]:
+            cells.append(f"[{c}]" if c else "[　]")
+        return "  ".join(cells)
+    if kind == "groups":
+        left = "  ".join("●" for _ in (visual.get("left") or [])[:10])
+        right = "  ".join("●" for _ in (visual.get("right") or [])[:10])
+        return left + "\n" + right
+    return ""
+
 
 def worksheet_to_markdown(worksheet: GeneratedWorksheet) -> str:
     """Convert a generated worksheet to markdown format for printing."""
@@ -350,7 +373,7 @@ def worksheet_to_markdown(worksheet: GeneratedWorksheet) -> str:
         f"",
         f"---",
         f"",
-        f"### 📋 做题说明",
+        f"### 🎮 活动说明",
         f"{worksheet.instructions}",
         f"",
         f"---",
@@ -364,6 +387,10 @@ def worksheet_to_markdown(worksheet: GeneratedWorksheet) -> str:
         if scen_line:
             lines.append(f"")
             lines.append(f"{scen_line}")
+        vis_md = _visual_markdown(p)
+        if vis_md:
+            lines.append(f"")
+            lines.append(f"\u25a0 {vis_md}")
         lines.append(f"")
         # Add visual elements if available
         data = p.data
@@ -671,6 +698,66 @@ def _mascot_svg(size: int = 64) -> str:
     </svg>'''
 
 
+def _visual_svg_html(prob) -> str:
+    """根据 visual 结构化数据生成内联 SVG（HTML 版操作图形）。"""
+    data = prob.data if isinstance(prob.data, dict) else {}
+    visual = data.get("visual")
+    if not isinstance(visual, dict):
+        return ""
+    kind = visual.get("kind")
+    colors_map = {"红": "#E53935", "蓝": "#1E88E5", "绿": "#43A047", "黄": "#FDD835",
+                  "紫": "#8E24AA", "橙": "#FB8C00"}
+    items_map = {"apple": "#E53935", "banana": "#FDD835", "orange": "#FB8C00",
+                 "leaf": "#43A047", "star": "#FDD835", "heart": "#F06292",
+                 "fish": "#1E88E5", "bird": "#1E88E5", "carrot": "#FB8C00",
+                 "flower": "#F06292", "balloon": "#1E88E5", "book": "#8E24AA"}
+    parts = []
+
+    def shape_svg(name, cx, cy, r, fill="white"):
+        if name == "triangle":
+            return f'<polygon points="{cx},{cy - r} {cx - r},{cy + r * 0.7} {cx + r},{cy + r * 0.7}" fill="{fill}" stroke="#333" stroke-width="2"/>'
+        if name == "square":
+            return f'<rect x="{cx - r}" y="{cy - r}" width="{2 * r}" height="{2 * r}" fill="{fill}" stroke="#333" stroke-width="2"/>'
+        return f'<circle cx="{cx}" cy="{cy}" r="{r}" fill="{fill}" stroke="#333" stroke-width="2"/>'
+
+    if kind == "shapes":
+        items = visual.get("items") or []
+        n = min(len(items), 8)
+        w = max(n * 38 + 16, 120)
+        for i, s in enumerate(items[:n]):
+            parts.append(shape_svg(s, 16 + i * 38 + 13, 26, 12))
+        return f'<svg width="{w}" height="52" viewBox="0 0 {w} 52" xmlns="http://www.w3.org/2000/svg">{"".join(parts)}</svg>'
+
+    if kind == "dots":
+        count = min(int(visual.get("count") or 0), 20)
+        w = max(count * 32 + 16, 80)
+        for i in range(count):
+            parts.append(f'<circle cx="{16 + i * 32 + 10}" cy="22" r="10" fill="#5C6BC0" stroke="#333" stroke-width="1.5"/>')
+        return f'<svg width="{w}" height="44" viewBox="0 0 {w} 44" xmlns="http://www.w3.org/2000/svg">{"".join(parts)}</svg>'
+
+    if kind == "pattern":
+        cl = visual.get("colors") or []
+        n = min(len(cl), 10)
+        w = max(n * 32 + 16, 90)
+        for i, c in enumerate(cl[:n]):
+            fill = colors_map.get(c, "#FFFFFF") if c else "#FFFFFF"
+            parts.append(f'<rect x="{16 + i * 32}" y="8" width="26" height="26" fill="{fill}" stroke="#333" stroke-width="1.8"/>')
+        return f'<svg width="{w}" height="44" viewBox="0 0 {w} 44" xmlns="http://www.w3.org/2000/svg">{"".join(parts)}</svg>'
+
+    if kind == "groups":
+        left = visual.get("left") or []
+        right = visual.get("right") or []
+        n = max(len(left), len(right), 1)
+        w = max(n * 30 + 16, 90)
+        for i, it in enumerate(left[:10]):
+            parts.append(f'<circle cx="{16 + i * 30 + 9}" cy="68" r="9" fill="{items_map.get(it, "#1E88E5")}" stroke="#333" stroke-width="1.2"/>')
+        for i, it in enumerate(right[:10]):
+            parts.append(f'<circle cx="{16 + i * 30 + 9}" cy="22" r="9" fill="{items_map.get(it, "#1E88E5")}" stroke="#333" stroke-width="1.2"/>')
+        return f'<svg width="{w}" height="96" viewBox="0 0 {w} 96" xmlns="http://www.w3.org/2000/svg">{"".join(parts)}</svg>'
+
+    return ""
+
+
 def worksheet_to_html(worksheet: GeneratedWorksheet) -> str:
     """Convert a generated worksheet to cartoon-style printable HTML.
 
@@ -784,6 +871,7 @@ def worksheet_to_html(worksheet: GeneratedWorksheet) -> str:
             </div>
             {scen_html}
             {visual_html}
+            {_visual_svg_html(p)}
             <div class="workspace">{lines_html}</div>
         </div>
         """
@@ -1071,6 +1159,98 @@ def _pdf_font_name():
 
 
 
+# ─── PDF 操作图形绘制（幼儿看图操作，纯矢量，不依赖 emoji 字体） ──────────
+_PDF_SHAPE_COLORS = {
+    "红": "#E53935", "蓝": "#1E88E5", "绿": "#43A047",
+    "黄": "#FDD835", "紫": "#8E24AA", "橙": "#FB8C00",
+}
+_PDF_ITEM_COLORS = {
+    "apple": "#E53935", "banana": "#FDD835", "orange": "#FB8C00",
+    "leaf": "#43A047", "star": "#FDD835", "heart": "#F06292",
+    "fish": "#1E88E5", "bird": "#1E88E5", "carrot": "#FB8C00",
+    "flower": "#F06292", "balloon": "#1E88E5", "book": "#8E24AA",
+}
+
+
+def _pdf_visual_drawing(prob):
+    """根据题目的 visual 结构化数据生成可嵌入 Platypus 的矢量图形（Drawing）。
+
+    返回 Drawing（flowable）或 None。
+    """
+    from reportlab.graphics.shapes import Drawing, Circle, Rect, Polygon
+    from reportlab.lib import colors
+
+    data = prob.data if isinstance(prob.data, dict) else {}
+    visual = data.get("visual")
+    if not isinstance(visual, dict):
+        return None
+    kind = visual.get("kind")
+    stroke = colors.black
+    sw = 1.6
+
+    if kind == "shapes":
+        items = visual.get("items") or []
+        n = min(len(items), 8)
+        if n == 0:
+            return None
+        w = max(n * 38 + 16, 120)
+        d = Drawing(w, 52)
+        for i, s in enumerate(items[:n]):
+            x = 16 + i * 38
+            if s == "triangle":
+                shape = Polygon([x + 13, 4, x, 40, x + 26, 40],
+                                fillColor=colors.white, strokeColor=stroke, strokeWidth=sw)
+            elif s == "square":
+                shape = Rect(x + 1, 6, 24, 24,
+                             fillColor=colors.white, strokeColor=stroke, strokeWidth=sw)
+            else:
+                shape = Circle(x + 13, 18, 12,
+                               fillColor=colors.white, strokeColor=stroke, strokeWidth=sw)
+            d.add(shape)
+        return d
+
+    if kind == "dots":
+        count = min(int(visual.get("count") or 0), 20)
+        if count <= 0:
+            return None
+        w = max(count * 32 + 16, 80)
+        d = Drawing(w, 44)
+        for i in range(count):
+            d.add(Circle(16 + i * 32, 22, 10,
+                         fillColor=colors.HexColor("#5C6BC0"),
+                         strokeColor=stroke, strokeWidth=1.2))
+        return d
+
+    if kind == "pattern":
+        colors_list = visual.get("colors") or []
+        n = min(len(colors_list), 10)
+        if n == 0:
+            return None
+        w = max(n * 32 + 16, 90)
+        d = Drawing(w, 44)
+        for i, c in enumerate(colors_list[:n]):
+            fill = colors.HexColor(_PDF_SHAPE_COLORS.get(c, "#FFFFFF")) if c else colors.white
+            d.add(Rect(16 + i * 32, 8, 26, 26, fillColor=fill,
+                       strokeColor=stroke, strokeWidth=sw))
+        return d
+
+    if kind == "groups":
+        left = visual.get("left") or []
+        right = visual.get("right") or []
+        n = max(len(left), len(right), 1)
+        w = max(n * 30 + 16, 90)
+        d = Drawing(w, 96)
+        for i, it in enumerate(left[:10]):
+            col = colors.HexColor(_PDF_ITEM_COLORS.get(it, "#1E88E5"))
+            d.add(Circle(16 + i * 30, 68, 9, fillColor=col, strokeColor=stroke, strokeWidth=1))
+        for i, it in enumerate(right[:10]):
+            col = colors.HexColor(_PDF_ITEM_COLORS.get(it, "#1E88E5"))
+            d.add(Circle(16 + i * 30, 22, 9, fillColor=col, strokeColor=stroke, strokeWidth=1))
+        return d
+
+    return None
+
+
 def worksheet_to_pdf(worksheet: "GeneratedWorksheet") -> bytes:
     """Render a generated worksheet to A4 PDF bytes (ReportLab).
 
@@ -1144,9 +1324,8 @@ def worksheet_to_pdf(worksheet: "GeneratedWorksheet") -> bytes:
     group = []
     for i, prob in enumerate(worksheet.problems):
         answer = worksheet.answer_key.get(prob.number, "")
+        # 幼儿版行内不显示答案（答案只放末尾教师区）
         ans_txt = ""
-        if worksheet.config.include_answer_key and answer not in (None, ""):
-            ans_txt = "（答案：" + str(answer) + "）"
         emoji = getattr(prob, "emoji", "") or ""
         op_tag = ("[操作：" + prob.operation + "] ") if prob.operation else ""
         scen_tag = ("📌 " + prob.scenario + " ") if prob.scenario else ""
@@ -1154,6 +1333,9 @@ def worksheet_to_pdf(worksheet: "GeneratedWorksheet") -> bytes:
             _pdf_clean_text(str(prob.number) + ". " + op_tag + scen_tag + str(emoji) + " " + str(prob.prompt) + " " + ans_txt),
             s_problem,
         ))
+        vis = _pdf_visual_drawing(prob)
+        if vis is not None:
+            group.append(vis)
         if len(group) >= 4 or i == len(worksheet.problems) - 1:
             story.append(KeepTogether(group))
             story.append(Spacer(1, 8))

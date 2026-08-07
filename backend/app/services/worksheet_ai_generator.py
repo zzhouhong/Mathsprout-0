@@ -58,7 +58,12 @@ class AIWorksheetProblem(BaseModel):
     scenario: str = ""
     prompt: str
     operation: str
-    visual: str = ""
+    # 结构化图形数据（渲染层据此画可操作图形）：
+    # {"kind":"shapes","items":["circle","triangle"],"color":"红"}
+    # {"kind":"dots","count":5}
+    # {"kind":"pattern","colors":["红","蓝","红","蓝","",""],"labels":["","","","","？","？"]}
+    # {"kind":"groups","left":["apple","apple"],"right":["apple","apple","apple"]}
+    visual: Any = None
     correct_answer: str = ""
     answer_hint: str = ""
 
@@ -90,6 +95,13 @@ def _system_prompt() -> str:
         "设计原则：\n"
         "1. 用一条故事线和一个固定卡通角色贯穿整张操作单，每个任务都是故事里的一个小任务。\n"
         "2. 每题的操作类型必须从以下清单中选一个，只能填：涂色、圈画、描线、配对、找一找、按规律续、点数（不要发明其他词，如「选择」「挑选」都不行）。\n"
+        "3. 每道题必须配一个「幼儿能直接看图操作」的图形（visual 字段），禁止纯文字题。visual 只能是以下四种结构化 JSON 之一：\n"
+        "   - 涂色/找一找/圈画题: {\"kind\":\"shapes\",\"items\":[\"circle\",\"triangle\",\"square\"],\"color\":\"红\"}（items 只能取 circle/triangle/square，color 只能取 红/蓝/绿/黄/紫/橙）\n"
+        "   - 点数题: {\"kind\":\"dots\",\"count\":5}\n"
+        "   - 按规律续题: {\"kind\":\"pattern\",\"colors\":[\"红\",\"蓝\",\"红\",\"蓝\",\"\",\"\"],\"labels\":[\"\",\"\",\"\",\"\",\"？\",\"？\"]}（前几格填色词，后几格空串待幼儿续涂）\n"
+        "   - 配对/比较题: {\"kind\":\"groups\",\"left\":[\"apple\",\"apple\",\"apple\"],\"right\":\"apple\",\"apple\",\"apple\",\"apple\"]}（物品用 apple/banana/orange/star/heart/leaf 等）\n"
+        "4. 题干用「任务/小游戏」语言，禁止出现「做题」「题目」「练习」「作答」等应试词汇；"
+        "对幼儿说话要亲切，用「帮帮」「一起来」「找一找」等。\n"
         "   操作指令必须描述清楚孩子在纸上要做的具体动作，例如：\n"
         "   - 涂色：把三角形都涂上红色\n"
         "   - 圈画：用笔圈出数量是3的那一组萝卜\n"
@@ -98,11 +110,11 @@ def _system_prompt() -> str:
         "   - 找一找：在图中找出所有圆形的物品\n"
         "   - 按规律续：前几格涂了红蓝红蓝，后面照样子继续涂\n"
         "   - 点数：数一数图里一共有几个苹果，把数字写在方框里\n"
-        "3. 题干文字必须自足：数量和答案要靠文字或图形指令表达，不得依赖 emoji 承载数量信息"
+        "5. 题干文字必须自足：数量和答案要靠文字或图形指令表达，不得依赖 emoji 承载数量信息"
         "（emoji 只作装饰，删掉后语义仍完整）。\n"
-        "4. 题干口语化、简短，适合教师读给幼儿听；不给幼儿长句指令。\n"
-        "5. 同一张操作单只聚焦用户指定的数学维度，不混入其他领域。\n"
-        "6. 输出严格 JSON，不要输出任何其他文字，不要输出任何思考过程、解释或前后缀。\n"
+        "6. 题干口语化、简短，适合教师读给幼儿听；不给幼儿长句指令。\n"
+        "7. 同一张操作单只聚焦用户指定的数学维度，不混入其他领域。\n"
+        "8. 输出严格 JSON，不要输出任何其他文字，不要输出任何思考过程、解释或前后缀。\n"
     )
 
 
@@ -117,8 +129,8 @@ def _build_user_prompt(config: WorksheetConfig, activity_theme: str) -> str:
         '"mascot_name": "固定角色名", "learning_objective": "学习目标", '
         '"problems": [{"number": 1, "dimension": "计数维度", "scenario": "本题情境", '
         '"prompt": "给孩子的操作指令", "operation": "操作类型", '
-        '"visual": "图形描述或装饰emoji（可为空）", "correct_answer": "答案", '
-        '"answer_hint": "给老师的提示"}]}'
+        '"visual": {"kind": "shapes", "items": ["circle", "triangle", "square"], "color": "红"}, '
+        '"correct_answer": "答案", "answer_hint": "给老师的提示"}]}'
     )
     return (
         f"请生成一张幼儿数学纸面操作单。\n"
